@@ -1243,9 +1243,12 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                     ref={photoInputRef}
                     type="file"
                     accept="image/*"
-                    multiple
+                    capture="environment"
                     className="hidden"
-                    onChange={(e) => onPickPhotoFiles(e.target.files)}
+                    onChange={(e) => {
+                      onPickPhotoFiles(e.target.files)
+                      e.target.value = ""   // чтобы можно было снять ещё раз
+                    }}
                   />
                 </div>
               )}
