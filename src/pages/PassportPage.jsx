@@ -1230,8 +1230,6 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                     type="button"
                     onClick={(e) => {
                       console.log("Add photo clicked")
-                      e.preventDefault()
-                      e.stopPropagation()
                       photoInputRef.current?.click()
                     }}
                     className="h-20 w-20 relative z-10 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1"
@@ -1241,13 +1239,14 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                   </button>
                   <input
                     ref={photoInputRef}
+                    id="photoInputCamera"
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    className="hidden"
+                    className="absolute -left-[9999px] w-px h-px opacity-0"
                     onChange={(e) => {
                       onPickPhotoFiles(e.target.files)
-                      e.target.value = ""   // чтобы можно было снять ещё раз
+                      e.target.value = ""
                     }}
                   />
                 </div>
