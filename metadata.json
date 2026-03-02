@@ -1,0 +1,5 @@
+{
+  "name": "Паспорт регіону",
+  "description": "Додаток для збору даних про торгові точки та формування паспортів регіонів.",
+  "requestFramePermissions": ["camera", "geolocation", "microphone"]
+}

@@ -1,44 +1,72 @@
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { PlusCircle, List, ChevronRight } from "lucide-react";
 
 export function SurveysStartPage() {
   const nav = useNavigate();
+  const MotionDiv = motion.div;
+  const MotionButton = motion.button;
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.title}>Опитування ТТ</div>
+    <div className="p-6 space-y-8 glow min-h-screen">
+      <MotionDiv 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="space-y-1"
+      >
+        <h1 className="text-3xl font-bold tracking-tight text-white">Опитування ТТ</h1>
+        <p className="text-muted-foreground">Керування візитами та звітами</p>
+      </MotionDiv>
 
-      <div style={styles.grid}>
-        <button style={styles.card} onClick={() => nav("/app/surveys/new")}>
-          <div style={styles.cardTitle}>Нова точка</div>
-          <div style={styles.cardSub}>Створити новий візит</div>
-        </button>
+      <div className="grid gap-4">
+        <MotionButton
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass group relative flex items-center justify-between p-5 rounded-[2rem] text-left transition-all hover:bg-white/[0.06]"
+          onClick={() => nav("/app/surveys/new")}
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+              <PlusCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-lg font-bold text-white">Нова точка</div>
+              <div className="text-sm text-muted-foreground">Створити новий візит</div>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-white transition-colors" />
+        </MotionButton>
 
-        <button style={{ ...styles.card, ...styles.cardDisabled }} disabled>
-          <div style={styles.cardTitle}>Наявні точки</div>
-          <div style={styles.cardSub}>Скоро буде доступно</div>
-        </button>
+        <MotionButton
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="glass opacity-50 cursor-not-allowed flex items-center justify-between p-5 rounded-[2rem] text-left"
+          disabled
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground">
+              <List className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-lg font-bold text-white">Наявні точки</div>
+              <div className="text-sm text-muted-foreground">Скоро буде доступно</div>
+            </div>
+          </div>
+        </MotionButton>
       </div>
+      
+      <MotionDiv 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="pt-8"
+      >
+        
+      </MotionDiv>
     </div>
   );
 }
-
-const styles = {
-  wrap: { padding: 20 },
-  title: { fontSize: 20, fontWeight: 800, marginBottom: 16 },
-  grid: { display: "grid", gap: 12 },
-  card: {
-    textAlign: "left",
-    padding: 16,
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#e5e7eb",
-    cursor: "pointer",
-  },
-  cardDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-  cardTitle: { fontSize: 16, fontWeight: 800 },
-  cardSub: { fontSize: 13, opacity: 0.75, marginTop: 4 },
-};
