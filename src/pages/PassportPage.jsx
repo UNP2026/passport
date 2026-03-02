@@ -239,6 +239,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     finalText: "",
   })
 
+  const photoInputRef = useRef(null)
+
   const [ui, setUI] = useState({
     confirmBackOpen: false,
     confirmGeoOpen: false,
@@ -570,8 +572,12 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
   }
 
   function onPickPhotoFiles(fileList) {
+    console.log("Picking files:", fileList)
     const files = Array.from(fileList || [])
-    if (!files.length) return
+    if (!files.length) {
+      console.log("No files selected")
+      return
+    }
 
     setPhotos((prev) => {
       const next = [...prev]
@@ -1219,21 +1225,29 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               ))}
 
               {photos.length < 4 && (
-                <label 
-                  htmlFor="photo-upload"
-                  className="h-20 w-20 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1"
-                >
-                  <Camera className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-[11px] text-muted-foreground">Додати</span>
+                <div className="relative">
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      console.log("Add photo clicked")
+                      e.preventDefault()
+                      e.stopPropagation()
+                      photoInputRef.current?.click()
+                    }}
+                    className="h-20 w-20 relative z-10 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1"
+                  >
+                    <Camera className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-[11px] text-muted-foreground">Додати</span>
+                  </button>
                   <input
-                    id="photo-upload"
+                    ref={photoInputRef}
                     type="file"
                     accept="image/*"
                     multiple
                     className="hidden"
                     onChange={(e) => onPickPhotoFiles(e.target.files)}
                   />
-                </label>
+                </div>
               )}
             </div>
           </div>
