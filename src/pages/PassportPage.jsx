@@ -1042,8 +1042,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               )}
 
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm text-muted-foreground">Прайс</div>
-                <div className="w-[260px]">
+                <div className="text-sm text-muted-foreground shrink-0">Прайс</div>
+                <div className="flex-1 max-w-[260px]">
                   <LabeledSelect
                     label=""
                     value={commercial.priceCategoryId}
@@ -1219,13 +1219,16 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               ))}
 
               {photos.length < 4 && (
-                <label className="h-20 w-20 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1">
+                <label 
+                  htmlFor="photo-upload"
+                  className="h-20 w-20 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1"
+                >
                   <Camera className="h-4 w-4 text-muted-foreground" />
                   <span className="text-[11px] text-muted-foreground">Додати</span>
                   <input
+                    id="photo-upload"
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     multiple
                     className="hidden"
                     onChange={(e) => onPickPhotoFiles(e.target.files)}
@@ -2080,7 +2083,7 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
                   </div>
                   {item.org_code && (
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
-                      Код ГО: {item.org_code}
+                      ЄДРПОУ: {item.org_code}
                     </div>
                   )}
                   {item.address_text && (

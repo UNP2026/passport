@@ -40,8 +40,8 @@
   * {
     @apply border-slate-800;
   }
-  body {
-    @apply bg-slate-950 text-slate-100;
+  html, body {
+    @apply bg-slate-950 text-slate-100 overflow-x-hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
@@ -61,12 +61,13 @@
   .glow {
     position: relative;
     isolation: isolate;
+    overflow-x: hidden;
   }
 
   .glow::before {
     content: "";
     position: absolute;
-    inset: -120px -40px auto -40px;
+    inset: -120px 0 auto 0;
     height: 260px;
     background: radial-gradient(closest-side, rgba(99, 102, 241, 0.32), rgba(99, 102, 241, 0) 70%);
     filter: blur(6px);

@@ -22,5 +22,6 @@ const styles = {
     minHeight: "100vh",
     background: "#0b1220",
     color: "#e5e7eb",
+    overflowX: "hidden",
   },
 };
