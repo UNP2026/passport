@@ -12,7 +12,7 @@ async function startServer() {
   app.use(express.json());
 
   const NP_API_URL = "https://api.novaposhta.ua/v2.0/json/";
-  const NP_API_KEY = process.env.NOVA_POSHTA_API_KEY;
+  const NP_API_KEY = process.env.VITE_NOVA_POSHTA_API_KEY;
 
   // Nova Poshta Proxy Routes
   app.post("/api/np/cities", async (req, res) => {
