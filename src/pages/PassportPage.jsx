@@ -144,6 +144,7 @@ const [contacts, setContacts] = useState({
   email: "",
   ttDescription: "",
   ttTypeId: "",
+  isActive: true,
 })
 
 // черновик для модалки
@@ -1709,6 +1710,12 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                   onChange={(e) => setContactsDraft((s) => ({ ...s, ttDescription: e.target.value }))}
                   placeholder="Додаткові нотатки..."
                   className="min-h-[110px] rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40"
+                />
+
+                <ToggleRow
+                  label="Точка працює?"
+                  checked={contactsDraft.isActive}
+                  onCheckedChange={(v) => setContactsDraft((s) => ({ ...s, isActive: v }))}
                 />
 
                 {/* Тип торгової точки */}
