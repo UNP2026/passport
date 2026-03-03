@@ -1,5 +1,5 @@
 /* global process */
-import { getTTById, searchTT } from "@/api/tt" 
+import { getTTById, searchTT, getTTTypes } from "@/api/tt" 
 import { searchOrgs } from "@/api/orgs"
 import { searchDistributors } from "@/api/distributors"
 import { getPriceCategories } from "@/api/prices"
@@ -50,13 +50,6 @@ import {
   Loader2,
   Sparkles,
 } from "lucide-react"
-
-const TT_TYPES = [
-  { id: "tt", label: "Торгова точка" },
-  { id: "network", label: "Мережа" },
-  { id: "national", label: "Нац. мережа" },
-  { id: "competitor", label: "Конкурент" },
-]
 
 // Заглушки — позже подтянем из БД
 const CHART_COLORS = [
@@ -168,17 +161,20 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
   const [manufacturersList, setManufacturersList] = useState([])
   const [hfBrands, setHfBrands] = useState([])
   const [pmBrands, setPmBrands] = useState([])
+  const [ttTypesList, setTtTypesList] = useState([])
 
   useEffect(() => {
     async function loadInitialData() {
-      const [prices, mans, hf] = await Promise.all([
+      const [prices, mans, hf, types] = await Promise.all([
         getPriceCategories(),
         getManufacturers(),
-        getHighfoamBrands()
+        getHighfoamBrands(),
+        getTTTypes()
       ])
       setPriceCategoriesList(prices)
       setManufacturersList(mans)
       setHfBrands(hf)
+      setTtTypesList(types)
     }
     loadInitialData()
   }, [])
@@ -695,11 +691,11 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
   if (contacts.contactName) parts.push(contacts.contactName)
   if (contacts.phone) parts.push(contacts.phone)
 
-  const typeLabel = TT_TYPES.find(t => t.id === contacts.ttTypeId)?.label
+  const typeLabel = ttTypesList.find(t => t.id === contacts.ttTypeId)?.label
   if (typeLabel) parts.push(typeLabel)
 
   return parts.join(" · ")
-}, [contacts])
+}, [contacts, ttTypesList])
 
   // ===== UI =====
   return (
@@ -1228,7 +1224,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                 <div className="relative">
                   <button 
                     type="button"
-                    onClick={(e) => {
+                    onClick={() => {
                       console.log("Add photo clicked")
                       photoInputRef.current?.click()
                     }}
@@ -1244,9 +1240,9 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                     accept="image/*"
                     capture="environment"
                     className="absolute -left-[9999px] w-px h-px opacity-0"
-                    onChange={(e) => {
-                      onPickPhotoFiles(e.target.files)
-                      e.target.value = ""
+                    onChange={() => {
+                      onPickPhotoFiles(photoInputRef.current.files)
+                      photoInputRef.current.value = ""
                     }}
                   />
                 </div>
@@ -1722,7 +1718,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    {TT_TYPES.map((t) => {
+                    {ttTypesList.map((t) => {
                       const active = contactsDraft.ttTypeId === t.id
 
                       return (

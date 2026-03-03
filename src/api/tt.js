@@ -38,3 +38,17 @@ export async function getTTById(ttId) {
   }
   return data || null
 }
+
+export async function getTTTypes() {
+  const { data, error } = await supabase
+    .from("tt_types")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("sort_order")
+
+  if (error) {
+    console.error("getTTTypes error:", error)
+    return []
+  }
+  return data.map(item => ({ id: item.id, label: item.name })) || []
+}
