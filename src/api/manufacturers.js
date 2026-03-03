@@ -5,7 +5,7 @@ export async function getManufacturers() {
     .from("manufacturers")
     .select("id, name")
     .eq("is_active", true)
-    .order("name", { ascending: true })
+    .order("sort_order")
 
   if (error) {
     console.error("getManufacturers error:", error)
