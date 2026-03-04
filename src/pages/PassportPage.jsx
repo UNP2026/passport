@@ -116,7 +116,7 @@ function pct(part, total) {
 
 export function PassportPage() {
   const nav = useNavigate()
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const MotionDiv = motion.div
 
   // ===== State =====
@@ -351,6 +351,10 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     if (!hf) return false
     return manufacturers.selected.some((x) => x.manufacturerId === hf.id)
   }, [manufacturers.selected, manufacturersList])
+
+  const fetchTTForSelectedOrg = useMemo(() => {
+    return (q) => searchTT(orgTT.selectedOrgId, q)
+  }, [orgTT.selectedOrgId])
 
   // ===== readiness (progress) =====
   const readiness = useMemo(() => {
@@ -664,9 +668,53 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     doSave()
   }
 
-  function doSave() {
-    // Пока заглушка — позже реальное сохранение в Supabase + Drive
-    setUI((s) => ({ ...s, savedOpen: true }))
+  async function doSave() {
+    if (!user?.id) {
+      alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.")
+      return
+    }
+    setUI((s) => ({ ...s, isProcessing: true }))
+    try {
+      const payload = {
+        orgTT,
+        address,
+        contacts,
+        commercial,
+        manufacturers,
+        modelRange,
+        pricing,
+        note,
+        visitDate,
+        userId: user?.id,
+        isHighfoamSelected,
+        premium,
+      }
+
+      const res = await fetch("/api/visit/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        let errorMessage = "Failed to save"
+        try {
+          const err = await res.json()
+          errorMessage = err.error || errorMessage
+        } catch {
+          const text = await res.text()
+          errorMessage = text || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
+      setUI((s) => ({ ...s, savedOpen: true }))
+    } catch (error) {
+      console.error("Save error:", error)
+      alert(`Помилка збереження: ${error.message}`)
+    } finally {
+      setUI((s) => ({ ...s, isProcessing: false }))
+    }
   }
 
   function continueAfterSave() {
@@ -939,7 +987,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                     }
                   }}
                   onSelect={handleSelectTT}
-                  fetchSuggestions={(q) => searchTT(orgTT.selectedOrgId, q)}
+                  fetchSuggestions={fetchTTForSelectedOrg}
                 />
               ) : (
                 <Input
@@ -1544,9 +1592,19 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
           <Button
             className="w-full h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
             onClick={saveReport}
+            disabled={ui.isProcessing}
           >
-            <Save className="h-4 w-4" />
-            Зберегти звіт
+            {ui.isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Збереження...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Зберегти звіт
+              </>
+            )}
           </Button>
         </div>
 
@@ -2038,7 +2096,7 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
     }, 400)
 
     return () => clearTimeout(timer)
-  }, [search, isOpen, minChars])
+  }, [search, isOpen, minChars, fetchSuggestions])
 
   return (
     <div className="space-y-1.5 relative">
