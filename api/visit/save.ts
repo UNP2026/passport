@@ -5,20 +5,31 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const authHeader = req.headers.authorization;
-  const token = authHeader ? authHeader.split(" ")[1] : null;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+  if (!url || !anon) {
+    return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY" });
+  }
 
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "",
-    {
-      global: {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    }
-  );
+  const authHeader = req.headers.authorization || "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return res.status(401).json({ error: "Not authenticated (missing Bearer token)" });
+  }
 
-  const body = req.body;
+  const supabase = createClient(url, anon, {
+    global: {
+      headers: { Authorization: authHeader }, // можно без split
+    },
+  });
+
+  // ✅ берём реального пользователя из токена
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData?.user) {
+    return res.status(401).json({ error: "Invalid session" });
+  }
+  const userId = userData.user.id;
+
+  const body = req.body || {};
   const {
     orgTT,
     address,
@@ -29,45 +40,36 @@ export default async function handler(req, res) {
     pricing,
     note,
     visitDate,
-    userId,
   } = body;
 
   try {
-    if (!process.env.VITE_SUPABASE_URL) {
-      throw new Error("VITE_SUPABASE_URL is not defined");
-    }
+    const orgName = orgTT?.orgNameNew || orgTT?.orgQuery;
+    const ttName = orgTT?.ttNameNew || orgTT?.ttQuery;
 
-    const orgName = orgTT.orgNameNew || orgTT.orgQuery;
-    const ttName = orgTT.ttNameNew || orgTT.ttQuery;
+    let finalOrgId = orgTT?.selectedOrgId || null;
+    let finalTTId = orgTT?.selectedTTId || null;
 
-    if (!userId) {
-      throw new Error("ID користувача не знайдено. Будь ласка, переконайтеся, що ви авторизовані.");
-    }
-
-    let finalOrgId = orgTT.selectedOrgId;
-    let finalTTId = orgTT.selectedTTId;
-
-    // 1. Якщо організація нова - створюємо
+    // 1) org create
     if (!finalOrgId && orgName) {
-      const { data: lastOrg } = await supabase
+      const { data: lastOrg, error: lastOrgErr } = await supabase
         .from("orgs")
         .select("org_code")
         .order("org_code", { ascending: false })
         .limit(1);
 
+      if (lastOrgErr) throw lastOrgErr;
+
       let nextNum = 1;
       if (lastOrg && lastOrg[0]?.org_code) {
         const match = lastOrg[0].org_code.match(/ORG-(\d+)/);
-        if (match) nextNum = parseInt(match[1]) + 1;
+        if (match) nextNum = parseInt(match[1], 10) + 1;
       }
+
       const orgCode = `ORG-${String(nextNum).padStart(4, "0")}`;
 
       const { data: newOrg, error: orgErr } = await supabase
         .from("orgs")
-        .insert({
-          name: orgName,
-          org_code: orgCode,
-        })
+        .insert({ name: orgName, org_code: orgCode })
         .select()
         .single();
 
@@ -75,17 +77,19 @@ export default async function handler(req, res) {
       finalOrgId = newOrg.id;
     }
 
-    // 2. Якщо ТТ нова - створюємо
+    // 2) tt create
     if (!finalTTId && ttName) {
+      if (!finalOrgId) throw new Error("org_id is required to create TT");
+
       const { data: newTT, error: ttErr } = await supabase
         .from("tt")
         .insert({
           org_id: finalOrgId,
           name: ttName,
-          city: address.city,
-          street: address.street,
-          house: address.house,
-          created_by: userId,
+          city: address?.city ?? null,
+          street: address?.street ?? null,
+          house: address?.house ?? null,
+          created_by: userId, // ✅ берём из токена
           is_active: true,
         })
         .select()
@@ -99,48 +103,48 @@ export default async function handler(req, res) {
       throw new Error("Торгова точка не визначена. Будь ласка, оберіть або введіть назву ТТ.");
     }
 
-    if (!contacts.ttTypeId) {
+    if (!contacts?.ttTypeId) {
       throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
     }
 
-    const isCooperating = body.isHighfoamSelected || false;
+    const isCooperating = Boolean(body.isHighfoamSelected);
 
-    // 3. Створюємо візит
+    // 3) visit create
     const { data: visit, error: visitErr } = await supabase
       .from("visits")
       .insert({
         tt_id: finalTTId,
-        author_user_id: userId,
-        visited_at: visitDate,
-        tt_type_id: contacts.ttTypeId || null,
-        distributor_id: commercial.distributorId || null,
-        visit_lat: address.geo?.lat || null,
-        visit_lng: address.geo?.lng || null,
-        visit_geo_address: address.geo?.resolvedAddress || address.address_text || null,
-        price_type_id: commercial.priceCategoryId || null,
-        price_seg_low: pricing.econom,
-        price_seg_mid: pricing.middle,
-        price_seg_high: body.premium || 0,
-        is_working: contacts.isActive,
+        author_user_id: userId, // ✅ из токена
+        visited_at: visitDate ?? null,
+        tt_type_id: contacts.ttTypeId,
+        distributor_id: commercial?.distributorId ?? null,
+        visit_lat: address?.geo?.lat ?? null,
+        visit_lng: address?.geo?.lng ?? null,
+        visit_geo_address: address?.geo?.resolvedAddress ?? address?.address_text ?? null,
+        price_type_id: commercial?.priceCategoryId ?? null,
+        price_seg_low: pricing?.econom ?? null,
+        price_seg_mid: pricing?.middle ?? null,
+        price_seg_high: body?.premium ?? 0,
+        is_working: contacts?.isActive ?? null,
         is_cooperating: isCooperating,
-        sells_pillows: commercial.sellsPillows,
-        contact_name: contacts.contactName,
-        contact_position: contacts.position,
-        contact_phone: contacts.phone,
-        contact_email: contacts.email,
-        tt_description: contacts.ttDescription,
-        visit_result_note: note.finalText,
+        sells_pillows: commercial?.sellsPillows ?? null,
+        contact_name: contacts?.contactName ?? null,
+        contact_position: contacts?.position ?? null,
+        contact_phone: contacts?.phone ?? null,
+        contact_email: contacts?.email ?? null,
+        tt_description: contacts?.ttDescription ?? null,
+        visit_result_note: note?.finalText ?? null,
       })
       .select()
       .single();
 
     if (visitErr) throw visitErr;
 
-    // 4. Зберігаємо виробників
-    if (manufacturers.selected.length > 0) {
+    // 4) manufacturers
+    if (manufacturers?.selected?.length) {
       const mansToInsert = manufacturers.selected.map((m) => ({
         visit_id: visit.id,
-        manufacturer_id: m.manufacturerId || null,
+        manufacturer_id: m.manufacturerId,
         pp: m.pp,
         kv: m.kv,
       }));
@@ -148,12 +152,16 @@ export default async function handler(req, res) {
       if (mansErr) throw mansErr;
     }
 
-    // 5. Зберігаємо бренди
-    const allBrands = [...modelRange.selectedHfBrandIds, ...modelRange.selectedPmBrandIds];
-    if (allBrands.length > 0) {
+    // 5) brands
+    const allBrands = [
+      ...(modelRange?.selectedHfBrandIds || []),
+      ...(modelRange?.selectedPmBrandIds || []),
+    ];
+
+    if (allBrands.length) {
       const brandsToInsert = allBrands.map((bid) => ({
         visit_id: visit.id,
-        brand_id: bid || null,
+        brand_id: bid,
       }));
       const { error: brandsErr } = await supabase.from("visit_brands").insert(brandsToInsert);
       if (brandsErr) throw brandsErr;
@@ -162,12 +170,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, visitId: visit.id });
   } catch (error) {
     console.error("Save Visit Error:", error);
-    const message = error.message || error.details || "Failed to save visit";
-    return res.status(500).json({ 
+    const message = error?.message || error?.details || "Failed to save visit";
+    return res.status(500).json({
       error: message,
-      details: error.details || null,
-      hint: error.hint || null,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined
+      details: error?.details || null,
+      hint: error?.hint || null,
+      stack: process.env.NODE_ENV === "development" ? error?.stack : undefined,
     });
   }
 }

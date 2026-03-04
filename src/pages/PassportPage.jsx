@@ -674,15 +674,23 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.")
       return
     }
+
     if (!contacts.ttTypeId) {
       alert("Будь ласка, оберіть тип торгової точки в розділі 'Контакти'")
-      setContactsOpen(true) // Open the modal so user can fix it
+      setContactsOpen(true)
       return
     }
+
     setUI((s) => ({ ...s, isProcessing: true }))
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data: { session }, error: sessErr } = await supabase.auth.getSession()
+      if (sessErr) throw new Error(sessErr.message || "Не вдалося отримати сесію")
+
+      const token = session?.access_token
+      if (!token) {
+        throw new Error("Ви не авторизовані. Перезайдіть у систему.")
+      }
 
       const payload = {
         orgTT,
@@ -694,16 +702,16 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
         pricing,
         note,
         visitDate,
-        userId: user?.id,
         isHighfoamSelected,
         premium,
+        // userId НЕ отправляем
       }
 
       const res = await fetch("/api/visit/save", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": token ? `Bearer ${token}` : ""
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       })
