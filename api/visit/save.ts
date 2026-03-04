@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
+function asUuidOrNull(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -17,12 +23,9 @@ export default async function handler(req, res) {
   }
 
   const supabase = createClient(url, anon, {
-    global: {
-      headers: { Authorization: authHeader }, // можно без split
-    },
+    global: { headers: { Authorization: authHeader } },
   });
 
-  // ✅ берём реального пользователя из токена
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData?.user) {
     return res.status(401).json({ error: "Invalid session" });
@@ -30,24 +33,14 @@ export default async function handler(req, res) {
   const userId = userData.user.id;
 
   const body = req.body || {};
-  const {
-    orgTT,
-    address,
-    contacts,
-    commercial,
-    manufacturers,
-    modelRange,
-    pricing,
-    note,
-    visitDate,
-  } = body;
+  const { orgTT, address, contacts, commercial, manufacturers, modelRange, pricing, note, visitDate } = body;
 
   try {
     const orgName = orgTT?.orgNameNew || orgTT?.orgQuery;
     const ttName = orgTT?.ttNameNew || orgTT?.ttQuery;
 
-    let finalOrgId = orgTT?.selectedOrgId || null;
-    let finalTTId = orgTT?.selectedTTId || null;
+    let finalOrgId = asUuidOrNull(orgTT?.selectedOrgId);
+    let finalTTId = asUuidOrNull(orgTT?.selectedTTId);
 
     // 1) org create
     if (!finalOrgId && orgName) {
@@ -77,9 +70,6 @@ export default async function handler(req, res) {
       finalOrgId = newOrg.id;
     }
 
-    const { data: dbg, error: dbgErr } = await supabase.rpc("debug_auth_ctx");
-    console.log("debug_auth_ctx:", dbg, dbgErr);
-
     // 2) tt create
     if (!finalTTId && ttName) {
       if (!finalOrgId) throw new Error("org_id is required to create TT");
@@ -105,7 +95,8 @@ export default async function handler(req, res) {
       throw new Error("Торгова точка не визначена. Будь ласка, оберіть або введіть назву ТТ.");
     }
 
-    if (!contacts?.ttTypeId) {
+    const ttTypeId = asUuidOrNull(contacts?.ttTypeId);
+    if (!ttTypeId) {
       throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
     }
 
@@ -116,14 +107,14 @@ export default async function handler(req, res) {
       .from("visits")
       .insert({
         tt_id: finalTTId,
-        author_user_id: userId, // ✅ из токена
+        author_user_id: userId,
         visited_at: visitDate ?? null,
-        tt_type_id: contacts.ttTypeId,
-        distributor_id: commercial?.distributorId ?? null,
+        tt_type_id: ttTypeId,
+        distributor_id: asUuidOrNull(commercial?.distributorId),
         visit_lat: address?.geo?.lat ?? null,
         visit_lng: address?.geo?.lng ?? null,
         visit_geo_address: address?.geo?.resolvedAddress ?? address?.address_text ?? null,
-        price_type_id: commercial?.priceCategoryId ?? null,
+        price_type_id: asUuidOrNull(commercial?.priceCategoryId),
         price_seg_low: pricing?.econom ?? null,
         price_seg_mid: pricing?.middle ?? null,
         price_seg_high: body?.premium ?? 0,
@@ -142,9 +133,13 @@ export default async function handler(req, res) {
 
     if (visitErr) throw visitErr;
 
-    // 4) manufacturers
-    if (manufacturers?.selected?.length) {
-      const mansToInsert = manufacturers.selected.map((m) => ({
+    // 4) manufacturers (фильтруем пустые uuid)
+    const mansSelected = (manufacturers?.selected || [])
+      .map((m) => ({ ...m, manufacturerId: asUuidOrNull(m.manufacturerId) }))
+      .filter((m) => m.manufacturerId);
+
+    if (mansSelected.length) {
+      const mansToInsert = mansSelected.map((m) => ({
         visit_id: visit.id,
         manufacturer_id: m.manufacturerId,
         pp: m.pp,
@@ -154,11 +149,13 @@ export default async function handler(req, res) {
       if (mansErr) throw mansErr;
     }
 
-    // 5) brands
+    // 5) brands (фильтруем пустые uuid)
     const allBrands = [
       ...(modelRange?.selectedHfBrandIds || []),
       ...(modelRange?.selectedPmBrandIds || []),
-    ];
+    ]
+      .map(asUuidOrNull)
+      .filter(Boolean);
 
     if (allBrands.length) {
       const brandsToInsert = allBrands.map((bid) => ({

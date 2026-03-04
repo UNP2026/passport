@@ -704,7 +704,6 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
         visitDate,
         isHighfoamSelected,
         premium,
-        // userId НЕ отправляем
       }
 
       const res = await fetch("/api/visit/save", {
