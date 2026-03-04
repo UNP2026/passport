@@ -89,7 +89,6 @@ export default async function handler(req, res) {
           city: address?.city ?? null,
           street: address?.street ?? null,
           house: address?.house ?? null,
-          created_by: userId, // ✅ берём из токена
           is_active: true,
         })
         .select()
