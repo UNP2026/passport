@@ -77,6 +77,9 @@ export default async function handler(req, res) {
       finalOrgId = newOrg.id;
     }
 
+    const { data: dbg, error: dbgErr } = await supabase.rpc("debug_auth_ctx");
+    console.log("debug_auth_ctx:", dbg, dbgErr);
+
     // 2) tt create
     if (!finalTTId && ttName) {
       if (!finalOrgId) throw new Error("org_id is required to create TT");
