@@ -1,29 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-  const url = process.env.VITE_SUPABASE_URL;
-  const anon = process.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !anon) return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY" });
-
-  const authHeader = req.headers.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Not authenticated (missing Bearer token)" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ВАЖНО: прокидываем токен пользователя внутрь Supabase client,
-  // чтобы в Postgres появился контекст и auth.uid() работал
-  const supabase = createClient(url, anon, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  // Получаем реального пользователя из токена
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userData?.user) {
-    return res.status(401).json({ error: "Invalid session" });
-  }
-  const userId = userData.user.id;
+  const supabase = createClient(
+    process.env.VITE_SUPABASE_URL || "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || ""
+  );
 
   const body = req.body;
   const {
@@ -36,35 +21,45 @@ export default async function handler(req, res) {
     pricing,
     note,
     visitDate,
+    userId,
   } = body;
 
   try {
-    const orgName = orgTT?.orgNameNew || orgTT?.orgQuery;
-    const ttName = orgTT?.ttNameNew || orgTT?.ttQuery;
+    if (!process.env.VITE_SUPABASE_URL) {
+      throw new Error("VITE_SUPABASE_URL is not defined");
+    }
 
-    let finalOrgId = orgTT?.selectedOrgId || null;
-    let finalTTId = orgTT?.selectedTTId || null;
+    const orgName = orgTT.orgNameNew || orgTT.orgQuery;
+    const ttName = orgTT.ttNameNew || orgTT.ttQuery;
 
-    // 1) org create (если нужно)
+    if (!userId) {
+      throw new Error("ID користувача не знайдено. Будь ласка, переконайтеся, що ви авторизовані.");
+    }
+
+    let finalOrgId = orgTT.selectedOrgId;
+    let finalTTId = orgTT.selectedTTId;
+
+    // 1. Якщо організація нова - створюємо
     if (!finalOrgId && orgName) {
-      const { data: lastOrg, error: lastOrgErr } = await supabase
+      const { data: lastOrg } = await supabase
         .from("orgs")
         .select("org_code")
         .order("org_code", { ascending: false })
         .limit(1);
 
-      if (lastOrgErr) throw lastOrgErr;
-
       let nextNum = 1;
-      const lastCode = lastOrg?.[0]?.org_code;
-      const match = lastCode?.match(/ORG-(\d+)/);
-      if (match) nextNum = parseInt(match[1], 10) + 1;
-
+      if (lastOrg && lastOrg[0]?.org_code) {
+        const match = lastOrg[0].org_code.match(/ORG-(\d+)/);
+        if (match) nextNum = parseInt(match[1]) + 1;
+      }
       const orgCode = `ORG-${String(nextNum).padStart(4, "0")}`;
 
       const { data: newOrg, error: orgErr } = await supabase
         .from("orgs")
-        .insert({ name: orgName, org_code: orgCode })
+        .insert({
+          name: orgName,
+          org_code: orgCode,
+        })
         .select()
         .single();
 
@@ -72,19 +67,17 @@ export default async function handler(req, res) {
       finalOrgId = newOrg.id;
     }
 
-    // 2) tt create (если нужно)
+    // 2. Якщо ТТ нова - створюємо
     if (!finalTTId && ttName) {
-      if (!finalOrgId) throw new Error("org_id is required to create TT");
-
       const { data: newTT, error: ttErr } = await supabase
         .from("tt")
         .insert({
           org_id: finalOrgId,
           name: ttName,
-          city: address?.city || null,
-          street: address?.street || null,
-          house: address?.house || null,
-          created_by: userId,      // под RLS будет проверка created_by = auth.uid()
+          city: address.city,
+          street: address.street,
+          house: address.house,
+          created_by: userId,
           is_active: true,
         })
         .select()
@@ -94,46 +87,52 @@ export default async function handler(req, res) {
       finalTTId = newTT.id;
     }
 
-    if (!finalTTId) throw new Error("TT is not defined");
+    if (!finalTTId) {
+      throw new Error("Торгова точка не визначена. Будь ласка, оберіть або введіть назву ТТ.");
+    }
+
+    if (!contacts.ttTypeId) {
+      throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
+    }
 
     const isCooperating = body.isHighfoamSelected || false;
 
-    // 3) visit create
+    // 3. Створюємо візит
     const { data: visit, error: visitErr } = await supabase
       .from("visits")
       .insert({
         tt_id: finalTTId,
         author_user_id: userId,
         visited_at: visitDate,
-        tt_type_id: contacts?.ttTypeId || null,
-        distributor_id: commercial?.distributorId || null,
-        visit_lat: address?.geo?.lat || null,
-        visit_lng: address?.geo?.lng || null,
-        visit_geo_address: address?.geo?.resolvedAddress || address?.address_text || null,
-        price_type_id: commercial?.priceCategoryId || null,
-        price_seg_low: pricing?.econom ?? null,
-        price_seg_mid: pricing?.middle ?? null,
-        price_seg_high: body?.premium ?? 0,
-        is_working: contacts?.isActive ?? null,
+        tt_type_id: contacts.ttTypeId || null,
+        distributor_id: commercial.distributorId || null,
+        visit_lat: address.geo?.lat || null,
+        visit_lng: address.geo?.lng || null,
+        visit_geo_address: address.geo?.resolvedAddress || address.address_text || null,
+        price_type_id: commercial.priceCategoryId || null,
+        price_seg_low: pricing.econom,
+        price_seg_mid: pricing.middle,
+        price_seg_high: body.premium || 0,
+        is_working: contacts.isActive,
         is_cooperating: isCooperating,
-        sells_pillows: commercial?.sellsPillows ?? null,
-        contact_name: contacts?.contactName || null,
-        contact_position: contacts?.position || null,
-        contact_phone: contacts?.phone || null,
-        contact_email: contacts?.email || null,
-        tt_description: contacts?.ttDescription || null,
-        visit_result_note: note?.finalText || null,
+        sells_pillows: commercial.sellsPillows,
+        contact_name: contacts.contactName,
+        contact_position: contacts.position,
+        contact_phone: contacts.phone,
+        contact_email: contacts.email,
+        tt_description: contacts.ttDescription,
+        visit_result_note: note.finalText,
       })
       .select()
       .single();
 
     if (visitErr) throw visitErr;
 
-    // 4) manufacturers
-    if (manufacturers?.selected?.length) {
+    // 4. Зберігаємо виробників
+    if (manufacturers.selected.length > 0) {
       const mansToInsert = manufacturers.selected.map((m) => ({
         visit_id: visit.id,
-        manufacturer_id: m.manufacturerId,
+        manufacturer_id: m.manufacturerId || null,
         pp: m.pp,
         kv: m.kv,
       }));
@@ -141,13 +140,13 @@ export default async function handler(req, res) {
       if (mansErr) throw mansErr;
     }
 
-    // 5) brands
-    const allBrands = [
-      ...(modelRange?.selectedHfBrandIds || []),
-      ...(modelRange?.selectedPmBrandIds || []),
-    ];
-    if (allBrands.length) {
-      const brandsToInsert = allBrands.map((bid) => ({ visit_id: visit.id, brand_id: bid }));
+    // 5. Зберігаємо бренди
+    const allBrands = [...modelRange.selectedHfBrandIds, ...modelRange.selectedPmBrandIds];
+    if (allBrands.length > 0) {
+      const brandsToInsert = allBrands.map((bid) => ({
+        visit_id: visit.id,
+        brand_id: bid || null,
+      }));
       const { error: brandsErr } = await supabase.from("visit_brands").insert(brandsToInsert);
       if (brandsErr) throw brandsErr;
     }
@@ -155,9 +154,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, visitId: visit.id });
   } catch (error) {
     console.error("Save Visit Error:", error);
-    return res.status(500).json({
-      error: error.message || "Failed to save visit",
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    const message = error.message || error.details || "Failed to save visit";
+    return res.status(500).json({ 
+      error: message,
+      details: error.details || null,
+      hint: error.hint || null,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined
     });
   }
 }

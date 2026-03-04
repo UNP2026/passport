@@ -13,7 +13,7 @@ async function startServer() {
   app.use(express.json());
 
   const NP_API_URL = "https://api.novaposhta.ua/v2.0/json/";
-  const NP_API_KEY = process.env.NOVA_POSHTA_API_KEY;
+  const NP_API_KEY = process.env.NOVA_POSHTA_API_KEY || "a22af8c3f467933232728b018d0fd7db";
 
   // Nova Poshta Proxy Routes
   app.post("/api/np/cities", async (req, res) => {
@@ -142,6 +142,10 @@ async function startServer() {
         throw new Error("Торгова точка не визначена. Будь ласка, оберіть або введіть назву ТТ.");
       }
 
+      if (!contacts.ttTypeId) {
+        throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
+      }
+
       const isCooperating = body.isHighfoamSelected || false;
 
       // 3. Створюємо візит
@@ -151,7 +155,7 @@ async function startServer() {
           tt_id: finalTTId,
           author_user_id: userId,
           visited_at: visitDate,
-          tt_type_id: contacts.ttTypeId,
+          tt_type_id: contacts.ttTypeId || null,
           distributor_id: commercial.distributorId || null,
           visit_lat: address.geo?.lat || null,
           visit_lng: address.geo?.lng || null,
@@ -179,7 +183,7 @@ async function startServer() {
       if (manufacturers.selected.length > 0) {
         const mansToInsert = manufacturers.selected.map((m) => ({
           visit_id: visit.id,
-          manufacturer_id: m.manufacturerId,
+          manufacturer_id: m.manufacturerId || null,
           pp: m.pp,
           kv: m.kv,
         }));
@@ -192,7 +196,7 @@ async function startServer() {
       if (allBrands.length > 0) {
         const brandsToInsert = allBrands.map((bid) => ({
           visit_id: visit.id,
-          brand_id: bid,
+          brand_id: bid || null,
         }));
         const { error: brandsErr } = await supabase.from("visit_brands").insert(brandsToInsert);
         if (brandsErr) throw brandsErr;
@@ -201,8 +205,11 @@ async function startServer() {
       res.status(200).json({ success: true, visitId: visit.id });
     } catch (error) {
       console.error("Save Visit Error:", error);
+      const message = error.message || error.details || "Failed to save visit";
       res.status(500).json({ 
-        error: error.message || "Failed to save visit",
+        error: message,
+        details: error.details || null,
+        hint: error.hint || null,
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined
       });
     }
