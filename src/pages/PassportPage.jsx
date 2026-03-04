@@ -668,7 +668,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     doSave()
   }
 
-  async function doSave() {
+  /*async function doSave() {
     if (!user?.id) {
       alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.")
       return
@@ -693,6 +693,65 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       const res = await fetch("/api/visit/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        let errorMessage = "Failed to save"
+        try {
+          const err = await res.json()
+          errorMessage = err.error || errorMessage
+        } catch {
+          const text = await res.text()
+          errorMessage = text || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
+      setUI((s) => ({ ...s, savedOpen: true }))
+    } catch (error) {
+      console.error("Save error:", error)
+      alert(`Помилка збереження: ${error.message}`)
+    } finally {
+      setUI((s) => ({ ...s, isProcessing: false }))
+    }
+  }*/
+
+    async function doSave() {
+    if (!user?.id) {
+      alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.")
+      return
+    }
+
+    setUI((s) => ({ ...s, isProcessing: true }))
+
+    try {
+      const payload = {
+        orgTT,
+        address,
+        contacts,
+        commercial,
+        manufacturers,
+        modelRange,
+        pricing,
+        note,
+        visitDate,
+        isHighfoamSelected,
+        premium,
+        // userId НЕ отправляем
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Ви не авторизовані. Перезайдіть у систему.")
+      }
+
+      const res = await fetch("/api/visit/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify(payload),
       })
 
