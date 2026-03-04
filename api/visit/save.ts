@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const url = process.env.SUPABASE_URL;
-  const anon = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.VITE_SUPABASE_URL;
+  const anon = process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !anon) return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY" });
 
   const authHeader = req.headers.authorization || "";
