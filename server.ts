@@ -55,12 +55,20 @@ async function startServer() {
     }
   });
 
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || ""
-  );
-
   app.post("/api/visit/save", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader ? authHeader.split(" ")[1] : null;
+
+    const supabase = createClient(
+      process.env.VITE_SUPABASE_URL || "",
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "",
+      {
+        global: {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      }
+    );
+
     const body = req.body;
     const {
       orgTT,

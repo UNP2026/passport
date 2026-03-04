@@ -1,6 +1,7 @@
 /* global process */
 import { getTTById, searchTT, getTTTypes } from "@/api/tt" 
 import { searchOrgs } from "@/api/orgs"
+import { supabase } from "@/lib/supabase"
 import { searchDistributors } from "@/api/distributors"
 import { getPriceCategories } from "@/api/prices"
 import { getManufacturers } from "@/api/manufacturers"
@@ -680,6 +681,9 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     }
     setUI((s) => ({ ...s, isProcessing: true }))
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const payload = {
         orgTT,
         address,
@@ -697,7 +701,10 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 
       const res = await fetch("/api/visit/save", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : ""
+        },
         body: JSON.stringify(payload),
       })
 
