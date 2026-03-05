@@ -357,6 +357,10 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     return (q) => searchTT(orgTT.selectedOrgId, q)
   }, [orgTT.selectedOrgId])
 
+  const hasTT = useMemo(() => {
+    return orgTT.ttMode === "select" ? !isBlank(orgTT.ttQuery) : !isBlank(orgTT.ttNameNew)
+  }, [orgTT])
+
   // ===== readiness (progress) =====
   const readiness = useMemo(() => {
     let score = 0
@@ -366,8 +370,6 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       orgTT.orgMode === "select"
         ? !isBlank(orgTT.orgQuery)
         : !isBlank(orgTT.orgNameNew)
-    const hasTT =
-      orgTT.ttMode === "select" ? !isBlank(orgTT.ttQuery) : !isBlank(orgTT.ttNameNew)
     if (hasOrg) score += 7.5
     if (hasTT) score += 7.5
 
@@ -395,7 +397,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     if (!isBlank(note.finalText)) score += 10
 
     return Math.round(Math.min(100, score))
-  }, [orgTT, contacts, address, photos.length, manufacturers.selected.length, pricing, note.finalText])
+  }, [orgTT, contacts, address, photos.length, manufacturers.selected.length, pricing, note.finalText, hasTT])
 
   const isFormEmpty = useMemo(() => {
     const hasOrg =
@@ -758,10 +760,29 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       return;
     }
 
+    // 1. Проверка ТТ
+    if (!hasTT) {
+      alert("Будь ласка, вкажіть торгову точку")
+      return
+    }
+
+    // 2. Проверка типа ТТ
     if (!contacts.ttTypeId) {
       alert("Будь ласка, оберіть тип торгової точки в розділі 'Контакти'");
       setContactsOpen(true);
       return;
+    }
+
+    // 3. Проверка адреса
+    if (isBlank(address.city) || isBlank(address.street) || isBlank(address.house)) {
+      alert("Будь ласка, заповніть повну адресу ТТ (місто, вулиця, будинок)")
+      return
+    }
+
+    // 4. Проверка производителей
+    if (manufacturers.selected.length === 0) {
+      alert("Будь ласка, додайте хоча б одного виробника")
+      return
     }
 
     setUI((s) => ({ ...s, isProcessing: true }));
