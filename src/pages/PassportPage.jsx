@@ -676,26 +676,32 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 }
 
   async function uploadVisitPhoto({ visitId, visitFolder, file, index }) {
-    const ext = (file.type === "image/png") ? "png" : "jpg";
-    const fileName = `photo_${String(index).padStart(2, "0")}_${Date.now()}_${safeFileName(file.name)}`;
-    const filePath = `${visitFolder}${fileName}`;
+  const ext = file.type === "image/png" ? "png" : "jpg";
+  const fileName = `photo_${String(index).padStart(2, "0")}_${Date.now()}_${safeFileName(file.name)}`;
+  const filePath = `${visitFolder}${fileName}`;
 
-    const { error: upErr } = await supabase.storage
-      .from("visit-photos")
-      .upload(filePath, file, {
-        contentType: file.type || `image/${ext}`,
-        upsert: false,
-      });
-
-    if (upErr) throw upErr;
-
-    const { error: metaErr } = await supabase.from("visit_photos").insert({
-      visit_id: visitId,
-      file_path: filePath,
-      mime_type: file.type || `image/${ext}`,
-      size_bytes: file.size,
+  const { data: upData, error: upErr } = await supabase.storage
+    .from("visit-photos")
+    .upload(filePath, file, {
+      contentType: file.type || `image/${ext}`,
+      upsert: false,
     });
 
+  console.log("storage.upload:", { filePath, upData, upErr });
+    if (upErr) throw upErr;
+
+    const { data: metaData, error: metaErr } = await supabase
+      .from("visit_photos")
+      .insert({
+        visit_id: visitId,
+        file_path: filePath,
+        mime_type: file.type || `image/${ext}`,
+        size_bytes: file.size,
+      })
+      .select()
+      .single();
+
+    console.log("visit_photos.insert:", { metaData, metaErr });
     if (metaErr) throw metaErr;
 
     return filePath;
