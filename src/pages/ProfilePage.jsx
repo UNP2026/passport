@@ -1,5 +1,4 @@
 import { useAuth } from "../hooks/useAuth";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogOut, User, Mail, Shield, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -7,6 +6,8 @@ import { motion } from "framer-motion";
 export function ProfilePage() {
   const { user, profile, signOut, profileLoading } = useAuth();
   const MotionDiv = motion.div;
+
+  const MotionButton = motion.button;
 
   const handleLogout = async () => {
     try {
@@ -66,14 +67,15 @@ export function ProfilePage() {
         </Card>
 
         <div className="pt-4">
-          <Button
-            variant="destructive"
-            className="w-full h-12 rounded-2xl shadow-lg shadow-destructive/20 flex items-center justify-center gap-2 text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+          <MotionButton
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full h-14 rounded-2xl bg-red-600 text-white font-bold flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(220,38,38,0.4)] hover:bg-red-500 transition-all"
             onClick={handleLogout}
           >
-            <LogOut className="w-5 h-5" />
-            Вийти з системи
-          </Button>
+            <LogOut className="w-6 h-6" />
+            <span className="text-lg">Вийти з системи</span>
+          </MotionButton>
         </div>
 
         {profileLoading && (

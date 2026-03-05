@@ -103,10 +103,6 @@ export function LoginPage() {
               </>
             )}
           </MotionButton>
-
-          <p className="text-xs text-center text-muted-foreground pt-2">
-            Якщо немає доступу — звернись до адміна, він створить користувача.
-          </p>
         </form>
       </MotionDiv>
     </div>
