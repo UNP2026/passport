@@ -5,6 +5,7 @@ import { AppShell } from "./layout/AppShell";
 
 import { SurveysStartPage } from "./pages/SurveysStartPage";
 import { PassportPage } from "./pages/PassportPage";
+import { ProfilePage } from "./pages/ProfilePage";
 
 export default function App() {
   return (
@@ -28,7 +29,7 @@ export default function App() {
           <Route path="map" element={<div style={{ padding: 20 }}>Карта (скоро)</div>} />
           <Route path="plan" element={<div style={{ padding: 20 }}>План (скоро)</div>} />
           <Route path="analytics" element={<div style={{ padding: 20 }}>Аналітика (скоро)</div>} />
-          <Route path="profile" element={<div style={{ padding: 20 }}>Профіль (скоро)</div>} />
+          <Route path="profile" element={<ProfilePage />} />
 
           <Route path="*" element={<Navigate to="/app/surveys/start" replace />} />
         </Route>
