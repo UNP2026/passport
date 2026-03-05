@@ -669,27 +669,62 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     doSave()
   }
 
+  function safeFileName(name) {
+  return String(name || "photo.jpg")
+    .replace(/[^\w.\-]+/g, "_")
+    .slice(0, 80);
+}
+
+  async function uploadVisitPhoto({ visitId, visitFolder, file, index }) {
+    const ext = (file.type === "image/png") ? "png" : "jpg";
+    const fileName = `photo_${String(index).padStart(2, "0")}_${Date.now()}_${safeFileName(file.name)}`;
+    const filePath = `${visitFolder}${fileName}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("visit-photos")
+      .upload(filePath, file, {
+        contentType: file.type || `image/${ext}`,
+        upsert: false,
+      });
+
+    if (upErr) throw upErr;
+
+    const { error: metaErr } = await supabase.from("visit_photos").insert({
+      visit_id: visitId,
+      file_path: filePath,
+      mime_type: file.type || `image/${ext}`,
+      size_bytes: file.size,
+    });
+
+    if (metaErr) throw metaErr;
+
+    return filePath;
+  }
+  
   async function doSave() {
     if (!user?.id) {
-      alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.")
-      return
+      alert("Помилка: користувач не авторизований. Будь ласка, увійдіть в систему знову.");
+      return;
     }
 
     if (!contacts.ttTypeId) {
-      alert("Будь ласка, оберіть тип торгової точки в розділі 'Контакти'")
-      setContactsOpen(true)
-      return
+      alert("Будь ласка, оберіть тип торгової точки в розділі 'Контакти'");
+      setContactsOpen(true);
+      return;
     }
 
-    setUI((s) => ({ ...s, isProcessing: true }))
+    setUI((s) => ({ ...s, isProcessing: true }));
 
     try {
-      const { data: { session }, error: sessErr } = await supabase.auth.getSession()
-      if (sessErr) throw new Error(sessErr.message || "Не вдалося отримати сесію")
+      const {
+        data: { session },
+        error: sessErr,
+      } = await supabase.auth.getSession();
+      if (sessErr) throw new Error(sessErr.message || "Не вдалося отримати сесію");
 
-      const token = session?.access_token
+      const token = session?.access_token;
       if (!token) {
-        throw new Error("Ви не авторизовані. Перезайдіть у систему.")
+        throw new Error("Ви не авторизовані. Перезайдіть у систему.");
       }
 
       const payload = {
@@ -704,7 +739,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
         visitDate,
         isHighfoamSelected,
         premium,
-      }
+      };
 
       const res = await fetch("/api/visit/save", {
         method: "POST",
@@ -713,26 +748,48 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
-      })
+      });
 
       if (!res.ok) {
-        let errorMessage = "Failed to save"
+        let errorMessage = "Failed to save";
         try {
-          const err = await res.json()
-          errorMessage = err.error || errorMessage
+          const err = await res.json();
+          errorMessage = err.error || errorMessage;
         } catch {
-          const text = await res.text()
-          errorMessage = text || errorMessage
+          const text = await res.text();
+          errorMessage = text || errorMessage;
         }
-        throw new Error(errorMessage)
+        throw new Error(errorMessage);
       }
 
-      setUI((s) => ({ ...s, savedOpen: true }))
+      // ✅ забираем visitId и visitFolder из ответа
+      const result = await res.json();
+      const visitId = result?.visitId;
+      const visitFolder = result?.visitFolder;
+
+      if (!visitId || !visitFolder) {
+        throw new Error("Збереження успішне, але сервер не повернув visitId/visitFolder");
+      }
+
+      // ✅ грузим фото (пока без сжатия; максимум 4)
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        if (!p?.file) continue;
+
+        await uploadVisitPhoto({
+          visitId,
+          visitFolder,
+          file: p.file,
+          index: i + 1,
+        });
+      }
+
+      setUI((s) => ({ ...s, savedOpen: true }));
     } catch (error) {
-      console.error("Save error:", error)
-      alert(`Помилка збереження: ${error.message}`)
+      console.error("Save error:", error);
+      alert(`Помилка збереження: ${error.message}`);
     } finally {
-      setUI((s) => ({ ...s, isProcessing: false }))
+      setUI((s) => ({ ...s, isProcessing: false }));
     }
   }
 
