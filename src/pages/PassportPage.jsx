@@ -669,6 +669,53 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     doSave()
   }
 
+  async function compressImageToJpeg(file, { maxSide = 1600, quality = 0.82 } = {}) {
+    // если вдруг прилетит не картинка
+    if (!file || !file.type?.startsWith("image/")) return file;
+
+    // читаем как bitmap (быстрее и без FileReader)
+    const bitmap = await createImageBitmap(file);
+
+    let { width, height } = bitmap;
+
+    // если уже маленькое — всё равно можно чуть сжать, но без ресайза
+    let targetW = width;
+    let targetH = height;
+
+    const longSide = Math.max(width, height);
+    if (longSide > maxSide) {
+      const scale = maxSide / longSide;
+      targetW = Math.round(width * scale);
+      targetH = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+
+    // bitmap можно освободить (не обязательно, но полезно)
+    bitmap.close?.();
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob(
+        (b) => resolve(b),
+        "image/jpeg",
+        quality
+      );
+    });
+
+    if (!blob) return file;
+
+    // сохраняем как File, чтобы upload получил имя/тип
+    const newName = (file.name || "photo").replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], newName, { type: "image/jpeg" });
+  }  
+  
   function safeFileName(name) {
   return String(name || "photo.jpg")
     .replace(/[^\w.\-]+/g, "_")
@@ -676,32 +723,30 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 }
 
   async function uploadVisitPhoto({ visitId, visitFolder, file, index }) {
-  const ext = file.type === "image/png" ? "png" : "jpg";
-  const fileName = `photo_${String(index).padStart(2, "0")}_${Date.now()}_${safeFileName(file.name)}`;
-  const filePath = `${visitFolder}${fileName}`;
+    const safeName = safeFileName(file?.name || "photo.jpg");
 
-  const { data: upData, error: upErr } = await supabase.storage
-    .from("visit-photos")
-    .upload(filePath, file, {
-      contentType: file.type || `image/${ext}`,
-      upsert: false,
-    });
+    // ✅ сжимаем/ресайзим
+    const compressed = await compressImageToJpeg(file, { maxSide: 1600, quality: 0.82 });
 
-  console.log("storage.upload:", { filePath, upData, upErr });
+    const fileName = `photo_${String(index).padStart(2, "0")}_${Date.now()}_${safeName.replace(/\.[^.]+$/, "")}.jpg`;
+    const filePath = `${visitFolder}${fileName}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("visit-photos")
+      .upload(filePath, compressed, {
+        contentType: "image/jpeg",
+        upsert: false,
+      });
+
     if (upErr) throw upErr;
 
-    const { data: metaData, error: metaErr } = await supabase
-      .from("visit_photos")
-      .insert({
-        visit_id: visitId,
-        file_path: filePath,
-        mime_type: file.type || `image/${ext}`,
-        size_bytes: file.size,
-      })
-      .select()
-      .single();
+    const { error: metaErr } = await supabase.from("visit_photos").insert({
+      visit_id: visitId,
+      file_path: filePath,
+      mime_type: "image/jpeg",
+      size_bytes: compressed.size,
+    });
 
-    console.log("visit_photos.insert:", { metaData, metaErr });
     if (metaErr) throw metaErr;
 
     return filePath;
