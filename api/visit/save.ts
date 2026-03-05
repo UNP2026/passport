@@ -6,6 +6,12 @@ function asUuidOrNull(v) {
   return s === "" ? null : s;
 }
 
+function toYmd(d) {
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return "unknown-date";
+  return dt.toISOString().slice(0, 10);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -42,7 +48,7 @@ export default async function handler(req, res) {
     let finalOrgId = asUuidOrNull(orgTT?.selectedOrgId);
     let finalTTId = asUuidOrNull(orgTT?.selectedTTId);
 
-    // 1) org create
+    // 1) ORG create (если нужно) — генерируем id заранее и пишем drive_folder_id сразу
     if (!finalOrgId && orgName) {
       const { data: lastOrg, error: lastOrgErr } = await supabase
         .from("orgs")
@@ -53,38 +59,51 @@ export default async function handler(req, res) {
       if (lastOrgErr) throw lastOrgErr;
 
       let nextNum = 1;
-      if (lastOrg && lastOrg[0]?.org_code) {
-        const match = lastOrg[0].org_code.match(/ORG-(\d+)/);
-        if (match) nextNum = parseInt(match[1], 10) + 1;
-      }
+      const lastCode = lastOrg?.[0]?.org_code;
+      const match = lastCode?.match(/ORG-(\d+)/);
+      if (match) nextNum = parseInt(match[1], 10) + 1;
 
       const orgCode = `ORG-${String(nextNum).padStart(4, "0")}`;
 
+      const orgId = crypto.randomUUID();
+      const orgFolder = `orgs/${orgId}/`;
+
       const { data: newOrg, error: orgErr } = await supabase
         .from("orgs")
-        .insert({ name: orgName, org_code: orgCode })
-        .select()
+        .insert({
+          id: orgId,
+          name: orgName,
+          org_code: orgCode,
+          drive_folder_id: orgFolder,
+        })
+        .select("id, drive_folder_id")
         .single();
 
       if (orgErr) throw orgErr;
       finalOrgId = newOrg.id;
     }
 
-    // 2) tt create
+    // 2) TT create (если нужно) — генерируем id заранее и пишем drive_folder_id сразу
     if (!finalTTId && ttName) {
       if (!finalOrgId) throw new Error("org_id is required to create TT");
+
+      const ttId = crypto.randomUUID();
+      const ttFolder = `orgs/${finalOrgId}/tt/${ttId}/`;
 
       const { data: newTT, error: ttErr } = await supabase
         .from("tt")
         .insert({
+          id: ttId,
           org_id: finalOrgId,
           name: ttName,
           city: address?.city ?? null,
           street: address?.street ?? null,
           house: address?.house ?? null,
           is_active: true,
+          drive_folder_id: ttFolder,
+          // created_by у тебя ставится default/trigger’ом, руками можно не передавать
         })
-        .select()
+        .select("id, drive_folder_id")
         .single();
 
       if (ttErr) throw ttErr;
@@ -100,12 +119,29 @@ export default async function handler(req, res) {
       throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
     }
 
+    // если org не создавали в этом запросе (org существующий), но finalOrgId пуст —
+    // доберем org_id через tt (на случай, если фронт не передал selectedOrgId)
+    if (!finalOrgId) {
+      const { data: ttRow, error: ttFetchErr } = await supabase
+        .from("tt")
+        .select("org_id")
+        .eq("id", finalTTId)
+        .single();
+      if (ttFetchErr) throw ttFetchErr;
+      finalOrgId = ttRow.org_id;
+    }
+
     const isCooperating = Boolean(body.isHighfoamSelected);
 
-    // 3) visit create
+    // 3) VISIT create — генерируем id заранее и вставляем drive_folder_id сразу (без UPDATE)
+    const visitId = crypto.randomUUID();
+    const ymd = toYmd(visitDate);
+    const visitFolder = `orgs/${finalOrgId}/tt/${finalTTId}/visits/${ymd}_${visitId}/`;
+
     const { data: visit, error: visitErr } = await supabase
       .from("visits")
       .insert({
+        id: visitId,
         tt_id: finalTTId,
         author_user_id: userId,
         visited_at: visitDate ?? null,
@@ -127,13 +163,14 @@ export default async function handler(req, res) {
         contact_email: contacts?.email ?? null,
         tt_description: contacts?.ttDescription ?? null,
         visit_result_note: note?.finalText ?? null,
+        drive_folder_id: visitFolder,
       })
-      .select()
+      .select("id, drive_folder_id")
       .single();
 
     if (visitErr) throw visitErr;
 
-    // 4) manufacturers (фильтруем пустые uuid)
+    // 4) manufacturers
     const mansSelected = (manufacturers?.selected || [])
       .map((m) => ({ ...m, manufacturerId: asUuidOrNull(m.manufacturerId) }))
       .filter((m) => m.manufacturerId);
@@ -149,7 +186,7 @@ export default async function handler(req, res) {
       if (mansErr) throw mansErr;
     }
 
-    // 5) brands (фильтруем пустые uuid)
+    // 5) brands
     const allBrands = [
       ...(modelRange?.selectedHfBrandIds || []),
       ...(modelRange?.selectedPmBrandIds || []),
@@ -166,7 +203,13 @@ export default async function handler(req, res) {
       if (brandsErr) throw brandsErr;
     }
 
-    return res.status(200).json({ success: true, visitId: visit.id });
+    return res.status(200).json({
+      success: true,
+      visitId: visit.id,
+      visitFolder: visit.drive_folder_id,
+      orgId: finalOrgId,
+      ttId: finalTTId,
+    });
   } catch (error) {
     console.error("Save Visit Error:", error);
     const message = error?.message || error?.details || "Failed to save visit";
