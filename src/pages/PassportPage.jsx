@@ -1632,8 +1632,8 @@ empty
                     {manufacturers.selected.map((it, idx) => {
                       const label =
                         manufacturersList.find((m) => m.id === it.manufacturerId)?.label ?? it.manufacturerId
-                      const ppP = pct(clampInt(it.pp, 0, 9999999), totalPP)
-                      const kvP = pct(clampInt(it.kv, 0, 999), totalKV)
+                      const ppP = pct(clampInt(it.pp, 0, 99), totalPP)
+                      const kvP = pct(clampInt(it.kv, 0, 99), totalKV)
                       const color = CHART_COLORS[idx % CHART_COLORS.length]
                       
                       return (
