@@ -1,4 +1,3 @@
-/* global process */
 import { getTTById, searchTT, getTTTypes } from "@/api/tt" 
 import { searchOrgs } from "@/api/orgs"
 import { supabase } from "@/lib/supabase"
@@ -11,7 +10,6 @@ import { useMemo, useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../hooks/useAuth"
 import { motion, AnimatePresence } from "framer-motion"
-import { GoogleGenAI } from "@google/genai"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -302,78 +300,19 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       try {
         const base64Data = reader.result.split(",")[1]
         
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY
-        const ai = new GoogleGenAI({ apiKey })
-        const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: "audio/webm",
-                    data: base64Data,
-                  },
-                },
-                {
-                  text: `Твоя задача — обработать расшифровку голосового сообщения торгового представителя после посещения торговой точки.
-
-На вход ты получаешь текст, полученный из распознавания речи (speech-to-text). Этот текст может содержать:
-- слова-паразиты
-- междометия (э, ммм, ну, короче, типа)
-- повторы
-- заикание
-- нецензурную лексику
-- обрывки фраз
-- шумовые фразы
-- бессмысленный текст, если запись была плохой
-
-Требования к обработке:
-
-1. Удали:
-- слова-паразиты
-- повторы
-- заикание
-- маты
-- бессмысленные фразы
-- технические артефакты распознавания речи
-
-2. Сохрани только смысловую информацию о визите.
-
-3. Преобразуй текст в краткий структурированный отчет о визите торговой точки.
-
-4. Не добавляй информацию, которой не было в тексте.
-
-5. Не придумывай данные.
-
-6. Сделай текст понятным и деловым.
-
-7. Если в тексте нет осмысленной информации о визите (только шум, обрывки слов, либо запись пустая) — верни строго:
-
-empty
-
-Формат ответа:
-
-Если есть смысловой текст:
-- вернуть отредактированный структурированный текст (до 300 символов), который можно сразу вставлять в отчет о визите.
-
-Если смысла нет:
-empty
-
-Пример:
-
-Вход:
-"ээ ну короче был в магазине ммм там матрасы вроде наши стоят но продавец говорит давно не брали блин типа надо прайс новый отправить"
-
-Ответ:
-В торговой точке присутствует наша продукция (матрасы). Продавец сообщил, что последние поставки были давно. Необходимо отправить обновленный прайс-лист.`,
-                },
-              ],
-            },
-          ],
+        const res = await fetch("/api/ai/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio: base64Data }),
         })
 
-        const resultText = response.text?.trim()
+        if (!res.ok) {
+          throw new Error("Failed to transcribe audio via server")
+        }
+
+        const data = await res.json()
+        const resultText = data.text
+
         if (resultText && resultText !== "EMPTY") {
           setNote(s => ({ ...s, finalText: resultText }))
         }
@@ -761,7 +700,7 @@ empty
   
   function safeFileName(name) {
   return String(name || "photo.jpg")
-    .replace(/[^\w.\-]+/g, "_")
+    .replace(/[^\w.-]+/g, "_")
     .slice(0, 80);
 }
 
