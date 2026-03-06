@@ -919,8 +919,8 @@ empty
   }
 
   // ===== Manufacturer analytics (simple demo) =====
-  const totalPP = manufacturers.selected.reduce((s, x) => s + clampInt(x.pp, 0, 9999999), 0)
-  const totalKV = manufacturers.selected.reduce((s, x) => s + clampInt(x.kv, 0, 999), 0)
+  const totalPP = manufacturers.selected.reduce((s, x) => s + clampInt(x.pp, 0, 99), 0)
+  const totalKV = manufacturers.selected.reduce((s, x) => s + clampInt(x.kv, 0, 99), 0)
   const hasContactsFilled = useMemo(() => {
   return (
     !isBlank(contacts.contactName) ||
