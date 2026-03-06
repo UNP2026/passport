@@ -665,8 +665,8 @@ empty
       const id = m.activeAddId
       if (!id) return m
 
-      const pp = clampInt(m.pp, 0, 9999999)
-      const kv = clampInt(m.kv, 0, 999)
+      const pp = clampInt(m.pp, 0, 99)
+      const kv = clampInt(m.kv, 0, 99)
       const exists = m.selected.some((x) => x.manufacturerId === id)
 
       if (exists) {
