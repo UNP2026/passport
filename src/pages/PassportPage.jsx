@@ -1524,14 +1524,14 @@ empty
 
                 <NumberSlider
                   label="Потенційні продажі (шт/міс)"
-                  max={50}
+                  max={99}
                   value={manufacturers.pp}
                   onChange={(v) => setManufacturers((s) => ({ ...s, pp: v }))}
                 />
 
                 <NumberSlider
                   label="К-ть місць (шт)"
-                  max={50}
+                  max={99}
                   value={manufacturers.kv}
                   onChange={(v) => setManufacturers((s) => ({ ...s, kv: v }))}
                 />
