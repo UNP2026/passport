@@ -5,7 +5,7 @@ export async function searchOrgs(query) {
     .from("orgs")
     .select("id, name, org_code")
     .order("name")
-    .limit(20)
+    
 
   if (query && query.length > 0) {
     q = q.ilike("name", `%${query}%`)

@@ -6,7 +6,7 @@ export async function searchDistributors(query) {
     .select("id, name")
     .eq("is_active", true)
     .order("name", { ascending: true })
-    .limit(20)
+    
 
   if (query && query.length > 0) {
     q = q.ilike("name", `%${query}%`)
