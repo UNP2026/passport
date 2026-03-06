@@ -246,7 +246,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     photoPreview: null, // url
     geoLoading: false,
     isRecording: false,
-    isProcessing: false,
+    isSaving: false,
+    isAiProcessing: false,
   })
 
   const mediaRecorderRef = useRef(null)
@@ -290,16 +291,15 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 
   async function processAudioWithAI(blob) {
     if (blob.size < 1000) {
-      // Too small to contain actual speech
-      setUI(s => ({ ...s, isProcessing: false }))
       return
     }
 
-    setUI(s => ({ ...s, isProcessing: true }))
-    try {
-      const reader = new FileReader()
-      reader.readAsDataURL(blob)
-      reader.onloadend = async () => {
+    setUI(s => ({ ...s, isAiProcessing: true }))
+    
+    const reader = new FileReader()
+    reader.readAsDataURL(blob)
+    reader.onloadend = async () => {
+      try {
         const base64Data = reader.result.split(",")[1]
         
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
@@ -332,16 +332,13 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
         const resultText = response.text?.trim()
         if (resultText && resultText !== "EMPTY") {
           setNote(s => ({ ...s, finalText: resultText }))
-        } else if (resultText === "EMPTY") {
-          console.log("AI detected no speech in audio")
         }
-        
-        setUI(s => ({ ...s, isProcessing: false }))
+      } catch (err) {
+        console.error("AI Processing error:", err)
+        alert("Помилка обробки аудіо. Спробуйте ще раз.")
+      } finally {
+        setUI(s => ({ ...s, isAiProcessing: false }))
       }
-    } catch (err) {
-      console.error("AI Processing error:", err)
-      alert("Помилка обробки аудіо. Спробуйте ще раз.")
-      setUI(s => ({ ...s, isProcessing: false }))
     }
   }
 
@@ -785,7 +782,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       return
     }
 
-    setUI((s) => ({ ...s, isProcessing: true }));
+    setUI((s) => ({ ...s, isSaving: true }));
 
     try {
       const {
@@ -861,7 +858,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       console.error("Save error:", error);
       alert(`Помилка збереження: ${error.message}`);
     } finally {
-      setUI((s) => ({ ...s, isProcessing: false }));
+      setUI((s) => ({ ...s, isSaving: false }));
     }
   }
 
@@ -1699,7 +1696,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                   : "bg-white/[0.05] hover:bg-white/[0.1] text-primary shadow-[0_0_10px_rgba(99,102,241,0.2)] border border-primary/20"
               )}
               onClick={ui.isRecording ? stopRecording : startRecording}
-              disabled={ui.isProcessing}
+              disabled={ui.isAiProcessing || ui.isSaving}
             >
               {ui.isRecording ? (
                 <>
@@ -1708,7 +1705,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                 </>
               ) : (
                 <>
-                  <Mic className={cn("h-4 w-4", ui.isProcessing && "animate-spin")} />
+                  <Mic className={cn("h-4 w-4", ui.isAiProcessing && "animate-spin")} />
                   <span className="text-[10px] font-black tracking-tighter">AI</span>
                 </>
               )}
@@ -1723,7 +1720,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
                 placeholder="Введіть текст або диктуйте голосом…"
                 className="min-h-[140px] rounded-3xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40"
               />
-              {ui.isProcessing && (
+              {ui.isAiProcessing && (
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-3xl flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1740,9 +1737,9 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
           <Button
             className="w-full h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
             onClick={saveReport}
-            disabled={ui.isProcessing}
+            disabled={ui.isSaving || ui.isAiProcessing}
           >
-            {ui.isProcessing ? (
+            {ui.isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Збереження...
