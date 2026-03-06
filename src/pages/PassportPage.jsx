@@ -665,8 +665,8 @@ empty
       const id = m.activeAddId
       if (!id) return m
 
-      const pp = clampInt(m.pp, 0, 99)
-      const kv = clampInt(m.kv, 0, 99)
+      const pp = clampInt(m.pp, 0, 9999)
+      const kv = clampInt(m.kv, 0, 9999)
       const exists = m.selected.some((x) => x.manufacturerId === id)
 
       if (exists) {
@@ -919,8 +919,8 @@ empty
   }
 
   // ===== Manufacturer analytics (simple demo) =====
-  const totalPP = manufacturers.selected.reduce((s, x) => s + clampInt(x.pp, 0, 99), 0)
-  const totalKV = manufacturers.selected.reduce((s, x) => s + clampInt(x.kv, 0, 99), 0)
+  const totalPP = manufacturers.selected.reduce((s, x) => s + clampInt(x.pp, 0, 9999), 0)
+  const totalKV = manufacturers.selected.reduce((s, x) => s + clampInt(x.kv, 0, 9999), 0)
   const hasContactsFilled = useMemo(() => {
   return (
     !isBlank(contacts.contactName) ||
@@ -2357,7 +2357,7 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
                   </div>
                   {item.org_code && (
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
-                      ЄДРПОУ: {item.org_code}
+                      Код ГО: {item.org_code}
                     </div>
                   )}
                   {item.address_text && (
@@ -2381,7 +2381,8 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
 }
 
 function NumberSlider({ label, max, value, onChange, disabled = false }) {
-  const safe = clampInt(value, 0, max)
+  //const safe = clampInt(value, 0, max)
+  const safe = Math.min(value, max)
   const percentage = (safe / max) * 100
   const [displayValue, setDisplayValue] = useState(safe.toString())
 
