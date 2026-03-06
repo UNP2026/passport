@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppShell } from "./layout/AppShell";
 
 import { SurveysStartPage } from "./pages/SurveysStartPage";
+import { ExistingPointsPage } from "./pages/ExistingPointsPage";
 import { PassportPage } from "./pages/PassportPage";
 import { ProfilePage } from "./pages/ProfilePage";
 
@@ -23,6 +24,7 @@ export default function App() {
           }
         >
           <Route path="surveys/start" element={<SurveysStartPage />} />
+          <Route path="surveys/existing" element={<ExistingPointsPage />} />
           <Route path="surveys/new" element={<PassportPage />} />
 
           {/* будущие страницы */}

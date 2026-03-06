@@ -41,21 +41,24 @@ export function SurveysStartPage() {
         </MotionButton>
 
         <MotionButton
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass opacity-50 cursor-not-allowed flex items-center justify-between p-5 rounded-[2rem] text-left"
-          disabled
+          className="glass group relative flex items-center justify-between p-5 rounded-[2rem] text-left transition-all hover:bg-white/[0.06]"
+          onClick={() => nav("/app/surveys/existing")}
         >
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground">
+            <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary transition-colors">
               <List className="h-6 w-6" />
             </div>
             <div>
               <div className="text-lg font-bold text-white">Наявні точки</div>
-              <div className="text-sm text-muted-foreground">Скоро буде доступно</div>
+              <div className="text-sm text-muted-foreground">Переглянути історію візитів</div>
             </div>
           </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-white transition-colors" />
         </MotionButton>
       </div>
       

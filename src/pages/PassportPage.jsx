@@ -8,7 +8,7 @@ import { getManufacturers } from "@/api/manufacturers"
 import { getHighfoamBrands, getPrivateLabelBrands } from "@/api/brands"
 import { cn } from "@/lib/utils"
 import { useMemo, useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useAuth } from "../hooks/useAuth"
 import { motion, AnimatePresence } from "framer-motion"
 import { GoogleGenAI } from "@google/genai"
@@ -117,6 +117,9 @@ function pct(part, total) {
 
 export function PassportPage() {
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
+  const ttIdParam = searchParams.get("ttId")
+  const editIdParam = searchParams.get("editId")
   const { profile, user } = useAuth()
   const MotionDiv = motion.div
 
@@ -180,6 +183,122 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     }
     loadInitialData()
   }, [])
+
+  useEffect(() => {
+    async function loadFromParams() {
+      if (ttIdParam) {
+        const tt = await getTTById(ttIdParam)
+        if (tt) {
+          setOrgTT(s => ({
+            ...s,
+            selectedOrgId: tt.org_id,
+            selectedTTId: tt.id,
+            ttQuery: tt.name,
+            orgQuery: tt.org?.name || "",
+            ttMode: "select",
+            orgMode: "select"
+          }))
+          setAddress(s => ({
+            ...s,
+            city: tt.city || "",
+            street: tt.street || "",
+            house: tt.house || "",
+            address_text: `${tt.city || ""}, ${tt.street || ""} ${tt.house || ""}`.trim()
+          }))
+        }
+      }
+
+      if (editIdParam) {
+        const { data: visit, error } = await supabase
+          .from("visits")
+          .select(`
+            *,
+            tt:tt_id (
+              *,
+              org:org_id (*)
+            ),
+            visit_manufacturers (*),
+            visit_brands (*)
+          `)
+          .eq("id", editIdParam)
+          .single()
+
+        if (visit && !error) {
+          setOrgTT({
+            orgMode: "select",
+            orgQuery: visit.tt?.org?.name || "",
+            ttMode: "select",
+            ttQuery: visit.tt?.name || "",
+            selectedOrgId: visit.tt?.org_id,
+            selectedTTId: visit.tt_id,
+          })
+          setContacts({
+            contactName: visit.contact_name || "",
+            position: visit.contact_position || "",
+            phone: visit.contact_phone || "",
+            email: visit.contact_email || "",
+            ttDescription: visit.tt_description || "",
+            ttTypeId: visit.tt_type_id || "",
+            isActive: visit.is_working,
+          })
+          setCommercial({
+            sellsPillows: visit.sells_pillows,
+            viaDistributor: !!visit.distributor_id,
+            distributorId: visit.distributor_id || "",
+            distributorQuery: "",
+            priceCategoryId: visit.price_type_id || "",
+          })
+          setAddress({
+            city: visit.tt?.city || "",
+            street: visit.tt?.street || "",
+            house: visit.tt?.house || "",
+            geo: { lat: visit.visit_lat, lng: visit.visit_lng, resolvedAddress: visit.visit_geo_address },
+            address_text: visit.visit_geo_address || "",
+          })
+          setManufacturers(s => ({
+            ...s,
+            selected: visit.visit_manufacturers.map(m => ({
+              manufacturerId: m.manufacturer_id,
+              pp: m.pp,
+              kv: m.kv
+            }))
+          }))
+          setPricing({
+            econom: visit.price_seg_low,
+            middle: visit.price_seg_mid,
+          })
+          setNote({
+            finalText: visit.visit_result_note || "",
+          })
+          
+          // Brands need to be handled after hfBrands are loaded
+          // We'll use another effect or handle it here if hfBrands are already there
+        }
+      }
+    }
+    loadFromParams()
+  }, [ttIdParam, editIdParam])
+
+  useEffect(() => {
+    if (editIdParam && hfBrands.length > 0) {
+      async function loadBrands() {
+        const { data: visitBrands } = await supabase
+          .from("visit_brands")
+          .select("brand_id")
+          .eq("visit_id", editIdParam)
+        
+        if (visitBrands) {
+          const brandIds = visitBrands.map(b => b.brand_id)
+          setModelRange(s => ({
+            ...s,
+            selectedHfBrandIds: brandIds.filter(bid => hfBrands.some(h => h.id === bid)),
+            selectedPmBrandIds: brandIds.filter(bid => !hfBrands.some(h => h.id === bid))
+          }))
+        }
+      }
+      loadBrands()
+    }
+  }, [editIdParam, hfBrands])
 
   useEffect(() => {
     async function loadPM() {
@@ -852,13 +971,14 @@ empty
         address,
         contacts,
         commercial,
-        manufacturers: manufacturers.selected,
+        manufacturers,
         modelRange,
         pricing,
         note,
         visitDate,
         isHighfoamSelected,
         premium,
+        editId: editIdParam,        
       };
 
       const res = await fetch("/api/visit/save", {
