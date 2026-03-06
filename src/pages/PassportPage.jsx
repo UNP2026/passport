@@ -852,7 +852,7 @@ empty
         address,
         contacts,
         commercial,
-        manufacturers,
+        manufacturers: manufacturers.selected,
         modelRange,
         pricing,
         note,
@@ -2380,26 +2380,32 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
   )
 }
 
-function NumberSlider({ label, max, value, onChange, disabled = false }) {
-  //const safe = clampInt(value, 0, max)
-  const safe = Math.min(value, max)
-  const percentage = (safe / max) * 100
-  const [displayValue, setDisplayValue] = useState(safe.toString())
+function NumberSlider({ label, max, value, onChange, disabled = false, inputMax = 9999 }) {
+  const safeValue = Math.min(Math.max(0, parseInt(value) || 0), inputMax)
+  const visualValue = Math.min(safeValue, max)
+  const percentage = (visualValue / max) * 100
+  const isOverMax = safeValue > max
+  const [displayValue, setDisplayValue] = useState(safeValue.toString())
 
   useEffect(() => {
-    setDisplayValue(safe.toString())
-  }, [safe])
+    setDisplayValue(safeValue.toString())
+  }, [safeValue])
+
+  const activeColor = isOverMax ? "#fbbf24" : "#6366f1"
 
   return (
     <div className={cn("space-y-2", disabled && "opacity-50 pointer-events-none")}>
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">{label}</div>
         <Input
-          className="w-24 text-right rounded-2xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 transition-all"
+          className={cn(
+            "w-24 text-right rounded-2xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 transition-all",
+            isOverMax && "text-amber-400 border-amber-400/30"
+          )}
           value={displayValue}
           disabled={disabled}
           onFocus={() => {
-            if (safe === 0) setDisplayValue("")
+            if (safeValue === 0) setDisplayValue("")
           }}
           onBlur={() => {
             if (displayValue === "") setDisplayValue("0")
@@ -2409,7 +2415,8 @@ function NumberSlider({ label, max, value, onChange, disabled = false }) {
             if (val === "" || /^\d+$/.test(val)) {
               setDisplayValue(val)
               if (val !== "") {
-                onChange(clampInt(val, 0, max))
+                const num = Math.min(parseInt(val) || 0, inputMax)
+                onChange(num)
               } else {
                 onChange(0)
               }
@@ -2422,12 +2429,15 @@ function NumberSlider({ label, max, value, onChange, disabled = false }) {
         type="range"
         min={0}
         max={max}
-        value={safe}
+        value={visualValue}
         disabled={disabled}
-        onChange={(e) => onChange(clampInt(e.target.value, 0, max))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer outline-none"
+        onChange={(e) => onChange(parseInt(e.target.value) || 0)}
+        className={cn(
+          "w-full h-1.5 rounded-full appearance-none cursor-pointer outline-none transition-all",
+          isOverMax && "shadow-[0_0_8px_rgba(251,191,36,0.2)]"
+        )}
         style={{
-          background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${percentage}%, rgba(255, 255, 255, 0.12) ${percentage}%, rgba(255, 255, 255, 0.12) 100%)`
+          background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${percentage}%, rgba(255, 255, 255, 0.12) ${percentage}%, rgba(255, 255, 255, 0.12) 100%)`
         }}
       />
     </div>
