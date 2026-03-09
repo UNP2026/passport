@@ -135,18 +135,29 @@ export function ExistingPointsPage() {
 
   const isEditable = (visitedAt) => {
     if (!visitedAt) return false;
+
     try {
-      // Parse DD.MM.YYYY
-      const [day, month, year] = visitedAt.split(".").map(Number);
-      const visitDate = new Date(year, month - 1, day);
+      let visitDate;
+
+      if (typeof visitedAt === "string" && visitedAt.includes(".")) {
+        // формат DD.MM.YYYY
+        const [day, month, year] = visitedAt.split(".").map(Number);
+        visitDate = new Date(year, month - 1, day);
+      } else {
+        // ISO / date from Supabase
+        visitDate = new Date(visitedAt);
+      }
+
+      if (Number.isNaN(visitDate.getTime())) return false;
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       visitDate.setHours(0, 0, 0, 0);
-      
-      const diffTime = Math.abs(today - visitDate);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      return diffDays <= 3;
+
+      const diffTime = today - visitDate;
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+      return diffDays >= 0 && diffDays <= 3;
     } catch {
       return false;
     }
