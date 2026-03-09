@@ -412,6 +412,9 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
           .eq("id", editIdParam)
           .single()
 
+          console.log("EDIT visit:", visit)
+          console.log("EDIT error:", error)
+
         if (visit && !error) {
           applyVisitToForm(visit, {
             resetMeta: false,
