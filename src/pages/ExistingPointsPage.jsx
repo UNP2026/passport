@@ -43,7 +43,7 @@ export function ExistingPointsPage() {
             org:org_id (*)
           )
         `)
-        .eq("author_user_id", user.id)
+        //.eq("author_user_id", user.id)
         .order("id", { ascending: false });
 
       if (error) throw error;
