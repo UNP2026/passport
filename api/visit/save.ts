@@ -7,6 +7,18 @@ function asUuidOrNull(v) {
 }
 
 function toYmd(d) {
+  if (!d) return "unknown-date";
+
+  // если уже ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+
+  // если DD.MM.YYYY
+  const m = String(d).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m) {
+    const [, dd, mm, yyyy] = m;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return "unknown-date";
   return dt.toISOString().slice(0, 10);
@@ -144,7 +156,7 @@ export default async function handler(req, res) {
         id: visitId,
         tt_id: finalTTId,
         author_user_id: userId,
-        visited_at: visitDate ?? null,
+        visited_at: ymd !== "unknown-date" ? ymd : null,
         tt_type_id: ttTypeId,
         distributor_id: asUuidOrNull(commercial?.distributorId),
         visit_lat: address?.geo?.lat ?? null,
