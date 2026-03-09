@@ -44,7 +44,7 @@ export function ExistingPointsPage() {
           )
         `)
         //.eq("author_user_id", user.id)
-        .order("id", { ascending: false });
+        .order("visited_at", { ascending: false });
 
       if (error) throw error;
       setVisits(data || []);
