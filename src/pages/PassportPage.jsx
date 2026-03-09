@@ -504,38 +504,66 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               date: todayUA(),
               authorName: profile?.full_name ?? "—",
             })
+
+            setContacts({
+              contactName: "",
+              position: "",
+              phone: "",
+              email: "",
+              ttDescription: "",
+              ttTypeId: "",
+              isActive: true,
+            })
+
+            setContactsDraft({
+              contactName: "",
+              position: "",
+              phone: "",
+              email: "",
+              ttDescription: "",
+              ttTypeId: "",
+              isActive: true,
+            })
+
+            setCommercial({
+              sellsPillows: false,
+              viaDistributor: false,
+              distributorId: "",
+              distributorQuery: "",
+              priceCategoryId: "",
+            })
+
+            setManufacturers({
+              activeAddId: "",
+              editorOpen: false,
+              pp: 0,
+              kv: 0,
+              selected: [],
+            })
+
+            setModelRange({
+              highfoamCount: 0,
+              privateCount: 0,
+              selectedHfBrandIds: [],
+              selectedPmBrandIds: [],
+            })
+
+            setPricing({
+              econom: 0,
+              middle: 0,
+            })
           }
         }
       }
     }
 
     // чтобы hfBrands уже были загружены для корректного деления brand_id на hf/pm
-    if ((editIdParam || ttIdParam) && hfBrands.length >= 0) {
+    if (editIdParam || ttIdParam) {
       loadFromParams()
     }
   }, [ttIdParam, editIdParam, hfBrands, profile])
 
-  useEffect(() => {
-    if (editIdParam && hfBrands.length > 0) {
-      async function loadBrands() {
-        const { data: visitBrands } = await supabase
-          .from("visit_brands")
-          .select("brand_id")
-          .eq("visit_id", editIdParam)
-        
-        if (visitBrands) {
-          const brandIds = visitBrands.map(b => b.brand_id)
-          setModelRange(s => ({
-            ...s,
-            selectedHfBrandIds: brandIds.filter(bid => hfBrands.some(h => h.id === bid)),
-            selectedPmBrandIds: brandIds.filter(bid => !hfBrands.some(h => h.id === bid))
-          }))
-        }
-      }
-      loadBrands()
-    }
-  }, [editIdParam, hfBrands])
-
+  
   useEffect(() => {
     async function loadPM() {
       if (orgTT.selectedOrgId) {
@@ -748,8 +776,7 @@ empty
     }
   }
 
-  const visitDate = useMemo(() => todayUA(), [])
-
+  
   const isHighfoamSelected = useMemo(() => {
     const hf = manufacturersList.find(m => m.label.toLowerCase() === "highfoam")
     if (!hf) return false
