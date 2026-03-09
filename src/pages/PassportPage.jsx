@@ -122,6 +122,10 @@ export function PassportPage() {
   const editIdParam = searchParams.get("editId")
   const { profile, user } = useAuth()
   const MotionDiv = motion.div
+  const [visitMeta, setVisitMeta] = useState({
+  date: todayUA(),
+  authorName: profile?.full_name ?? "—",
+})
 
   // ===== State =====
 
@@ -169,6 +173,16 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
   const [ttTypesList, setTtTypesList] = useState([])
 
   useEffect(() => {
+    if (!editIdParam) {
+      setVisitMeta({
+        date: todayUA(),
+        authorName: profile?.full_name ?? "—",
+      })
+    }
+  }, [profile, editIdParam])
+  
+  
+  useEffect(() => {
     async function loadInitialData() {
       const [prices, mans, hf, types] = await Promise.all([
         getPriceCategories(),
@@ -184,7 +198,105 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     loadInitialData()
   }, [])
 
-  useEffect(() => {
+  function applyVisitToForm(visit, options = {}) {
+    const {
+      resetMeta = false,
+      resetGeo = false,
+      resetNote = false,
+      resetPhotos = false,
+    } = options
+
+    const loadedContacts = {
+      contactName: visit.contact_name || "",
+      position: visit.contact_position || "",
+      phone: visit.contact_phone || "",
+      email: visit.contact_email || "",
+      ttDescription: visit.tt_description || "",
+      ttTypeId: visit.tt_type_id || "",
+      isActive: visit.is_working ?? true,
+    }
+
+    setOrgTT({
+      orgMode: "select",
+      orgQuery: visit.tt?.org?.name || "",
+      orgNameNew: "",
+      ttMode: "select",
+      ttQuery: visit.tt?.name || "",
+      ttNameNew: "",
+      selectedOrgId: visit.tt?.org_id || null,
+      selectedTTId: visit.tt_id || null,
+    })
+
+    setContacts(loadedContacts)
+    setContactsDraft(loadedContacts)
+
+    setCommercial({
+      sellsPillows: visit.sells_pillows ?? false,
+      viaDistributor: !!visit.distributor_id,
+      distributorId: visit.distributor_id || "",
+      distributorQuery: "",
+      priceCategoryId: visit.price_type_id || "",
+    })
+
+    setAddress({
+      city: visit.tt?.city || "",
+      cityRef: "",
+      street: visit.tt?.street || "",
+      house: visit.tt?.house || "",
+      geo: resetGeo
+        ? null
+        : (visit.visit_lat || visit.visit_lng || visit.visit_geo_address
+            ? {
+                lat: visit.visit_lat,
+                lng: visit.visit_lng,
+                resolvedAddress: visit.visit_geo_address,
+              }
+            : null),
+      address_text: visit.visit_geo_address || "",
+    })
+
+    setManufacturers((s) => ({
+      ...s,
+      selected: (visit.visit_manufacturers || []).map((m) => ({
+        manufacturerId: m.manufacturer_id,
+        pp: m.pp,
+        kv: m.kv,
+      })),
+      activeAddId: "",
+      editorOpen: false,
+      pp: 0,
+      kv: 0,
+    }))
+
+    setPricing({
+      econom: visit.price_seg_low ?? 0,
+      middle: visit.price_seg_mid ?? 0,
+    })
+
+    setNote({
+      finalText: resetNote ? "" : (visit.visit_result_note || ""),
+    })
+
+    if (resetPhotos) {
+      setPhotos([])
+    }
+
+    if (resetMeta) {
+      setVisitMeta({
+        date: todayUA(),
+        authorName: profile?.full_name ?? "—",
+      })
+    } else {
+      setVisitMeta({
+        date: visit.visited_at
+          ? new Date(visit.visited_at).toLocaleDateString("uk-UA")
+          : todayUA(),
+        authorName: visit.author?.full_name || profile?.full_name || "—",
+      })
+    }
+  }
+
+  /*useEffect(() => {
     async function loadFromParams() {
       if (ttIdParam) {
         const tt = await getTTById(ttIdParam)
@@ -277,7 +389,131 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       }
     }
     loadFromParams()
-  }, [ttIdParam, editIdParam])
+  }, [ttIdParam, editIdParam])*/
+
+  useEffect(() => {
+    async function loadFromParams() {
+      // ===== Режим редактирования визита =====
+      if (editIdParam) {
+        const { data: visit, error } = await supabase
+          .from("visits")
+          .select(`
+            *,
+            tt:tt_id (
+              *,
+              org:org_id (*)
+            ),
+            author:author_user_id (
+              full_name
+            ),
+            visit_manufacturers (*),
+            visit_brands (*)
+          `)
+          .eq("id", editIdParam)
+          .single()
+
+        if (visit && !error) {
+          applyVisitToForm(visit, {
+            resetMeta: false,
+            resetGeo: false,
+            resetNote: false,
+            resetPhotos: false,
+          })
+
+          const brandIds = (visit.visit_brands || []).map((b) => b.brand_id)
+
+          setModelRange((s) => ({
+            ...s,
+            selectedHfBrandIds: brandIds.filter((bid) => hfBrands.some((h) => h.id === bid)),
+            selectedPmBrandIds: brandIds.filter((bid) => !hfBrands.some((h) => h.id === bid)),
+            highfoamCount: brandIds.filter((bid) => hfBrands.some((h) => h.id === bid)).length,
+            privateCount: brandIds.filter((bid) => !hfBrands.some((h) => h.id === bid)).length,
+          }))
+        }
+
+        return
+      }
+
+      // ===== Режим нового визита по образцу точки =====
+      if (ttIdParam) {
+        const { data: lastVisit, error } = await supabase
+          .from("visits")
+          .select(`
+            *,
+            tt:tt_id (
+              *,
+              org:org_id (*)
+            ),
+            author:author_user_id (
+              full_name
+            ),
+            visit_manufacturers (*),
+            visit_brands (*)
+          `)
+          .eq("tt_id", ttIdParam)
+          .order("visited_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        // если по точке уже есть визит — берём его как шаблон
+        if (lastVisit && !error) {
+          applyVisitToForm(lastVisit, {
+            resetMeta: true,
+            resetGeo: true,
+            resetNote: true,
+            resetPhotos: true,
+          })
+
+          const brandIds = (lastVisit.visit_brands || []).map((b) => b.brand_id)
+
+          setModelRange((s) => ({
+            ...s,
+            selectedHfBrandIds: brandIds.filter((bid) => hfBrands.some((h) => h.id === bid)),
+            selectedPmBrandIds: brandIds.filter((bid) => !hfBrands.some((h) => h.id === bid)),
+            highfoamCount: brandIds.filter((bid) => hfBrands.some((h) => h.id === bid)).length,
+            privateCount: brandIds.filter((bid) => !hfBrands.some((h) => h.id === bid)).length,
+          }))
+        } else {
+          // если визитов ещё нет — просто подгружаем саму ТТ
+          const tt = await getTTById(ttIdParam)
+
+          if (tt) {
+            setOrgTT((s) => ({
+              ...s,
+              selectedOrgId: tt.org_id,
+              selectedTTId: tt.id,
+              ttQuery: tt.name,
+              orgQuery: tt.org?.name || "",
+              ttMode: "select",
+              orgMode: "select",
+            }))
+
+            setAddress((s) => ({
+              ...s,
+              city: tt.city || "",
+              street: tt.street || "",
+              house: tt.house || "",
+              geo: null,
+              address_text: `${tt.city || ""}, ${tt.street || ""} ${tt.house || ""}`.trim(),
+            }))
+
+            setPhotos([])
+            setNote({ finalText: "" })
+
+            setVisitMeta({
+              date: todayUA(),
+              authorName: profile?.full_name ?? "—",
+            })
+          }
+        }
+      }
+    }
+
+    // чтобы hfBrands уже были загружены для корректного деления brand_id на hf/pm
+    if ((editIdParam || ttIdParam) && hfBrands.length >= 0) {
+      loadFromParams()
+    }
+  }, [ttIdParam, editIdParam, hfBrands, profile])
 
   useEffect(() => {
     if (editIdParam && hfBrands.length > 0) {
@@ -971,11 +1207,11 @@ empty
         address,
         contacts,
         commercial,
-        manufacturers,
+        manufacturers: manufacturers.selected,
         modelRange,
         pricing,
         note,
-        visitDate,
+        visitDate: visitMeta.date,
         isHighfoamSelected,
         premium,
         editId: editIdParam,        
@@ -1078,9 +1314,9 @@ empty
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span>{visitDate}</span>
+            <span>{visitMeta.date}</span>
           </div>
-          <span>{profile?.full_name ?? "—"}</span>
+          <span>{visitMeta.authorName}</span>
         </div>
 
         {/* Title + progress */}
