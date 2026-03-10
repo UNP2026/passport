@@ -10,17 +10,33 @@ import {
   MapPin, 
   Plus, 
   Pencil, 
+  Eye,
   ChevronDown, 
   ChevronUp,
   History,
   Calendar,
-  Loader2
+  Loader2,
+  User
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "—";
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}.${m}.${y}`;
+  } catch {
+    return dateStr;
+  }
+};
 
 export function ExistingPointsPage() {
   const nav = useNavigate();
@@ -41,7 +57,8 @@ export function ExistingPointsPage() {
           tt:tt_id (
             *,
             org:org_id (*)
-          )
+          ),
+          author:author_user_id (full_name)
         `)
         //.eq("author_user_id", user.id)
         .order("visited_at", { ascending: false });
@@ -291,7 +308,10 @@ function TTCard({ item, isEditable, nav }) {
   const canEdit = isEditable(lastVisit.visited_at);
 
   return (
-    <Card className="glass border-white/10 overflow-hidden hover:border-primary/30 transition-colors">
+    <Card 
+      className="glass border-white/10 overflow-hidden hover:border-primary/30 transition-colors cursor-pointer"
+      onClick={() => nav(`/app/surveys/new?viewId=${lastVisit.id}`)}
+    >
       <CardContent className="p-4 space-y-4">
         <div className="flex justify-between items-start gap-3">
           <div className="space-y-1">
@@ -307,17 +327,41 @@ function TTCard({ item, isEditable, nav }) {
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            <span>Останній: <span className="text-white/80">{lastVisit.visited_at}</span></span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span className="text-white/80">{formatDate(lastVisit.visited_at)}</span>
+            </div>
+            {lastVisit.author?.full_name && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                <span className="text-white/80">{lastVisit.author.full_name}</span>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-2">
             <Button 
               size="sm" 
               variant="outline" 
+              className="h-8 w-8 p-0 rounded-lg border-white/10 hover:bg-blue-500 hover:text-white transition-all"
+              onClick={(e) => {
+                e.stopPropagation();
+                nav(`/app/surveys/new?viewId=${lastVisit.id}`);
+              }}
+              title="Переглянути останній візит"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+
+            <Button 
+              size="sm" 
+              variant="outline" 
               className="h-8 w-8 p-0 rounded-lg border-white/10 hover:bg-primary hover:text-white transition-all"
-              onClick={() => nav(`/app/surveys/new?ttId=${tt.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                nav(`/app/surveys/new?ttId=${tt.id}`);
+              }}
               title="Створити новий візит"
             >
               <Plus className="h-4 w-4" />
@@ -331,7 +375,10 @@ function TTCard({ item, isEditable, nav }) {
                 "h-8 w-8 p-0 rounded-lg border-white/10 transition-all",
                 canEdit ? "hover:bg-amber-500 hover:text-white" : "opacity-30 grayscale"
               )}
-              onClick={() => nav(`/app/surveys/new?editId=${lastVisit.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                nav(`/app/surveys/new?editId=${lastVisit.id}`);
+              }}
               title={canEdit ? "Редагувати останній візит" : "Редагування недоступне (більше 3 днів)"}
             >
               <Pencil className="h-3.5 w-3.5" />

@@ -144,43 +144,65 @@ export default async function handler(req, res) {
     }
 
     const isCooperating = Boolean(body.isHighfoamSelected);
+    const isoVisitDate = toIsoDate(visitDate);
 
-    // 3) VISIT create — генерируем id заранее и вставляем drive_folder_id сразу (без UPDATE)
-    const visitId = crypto.randomUUID();
-    const ymd = toYmd(visitDate);
-    const visitFolder = `orgs/${finalOrgId}/tt/${finalTTId}/visits/${ymd}_${visitId}/`;
+    // 3) VISIT create/update
+    let visit;
+    const visitData = {
+      tt_id: finalTTId,
+      author_user_id: userId,
+      visited_at: isoVisitDate,
+      tt_type_id: ttTypeId,
+      distributor_id: asUuidOrNull(commercial?.distributorId),
+      visit_lat: address?.geo?.lat ?? null,
+      visit_lng: address?.geo?.lng ?? null,
+      visit_geo_address: address?.geo?.resolvedAddress ?? address?.address_text ?? null,
+      price_type_id: asUuidOrNull(commercial?.priceCategoryId),
+      price_seg_low: pricing?.econom ?? null,
+      price_seg_mid: pricing?.middle ?? null,
+      price_seg_high: body?.premium ?? 0,
+      is_working: contacts?.isActive ?? null,
+      is_cooperating: isCooperating,
+      sells_pillows: commercial?.sellsPillows ?? null,
+      contact_name: contacts?.contactName ?? null,
+      contact_position: contacts?.position ?? null,
+      contact_phone: contacts?.phone ?? null,
+      contact_email: contacts?.email ?? null,
+      tt_description: contacts?.ttDescription ?? null,
+      visit_result_note: note?.finalText ?? null,
+    };
 
-    const { data: visit, error: visitErr } = await supabase
-      .from("visits")
-      .insert({
-        id: visitId,
-        tt_id: finalTTId,
-        author_user_id: userId,
-        visited_at: ymd !== "unknown-date" ? ymd : null,
-        tt_type_id: ttTypeId,
-        distributor_id: asUuidOrNull(commercial?.distributorId),
-        visit_lat: address?.geo?.lat ?? null,
-        visit_lng: address?.geo?.lng ?? null,
-        visit_geo_address: address?.geo?.resolvedAddress ?? address?.address_text ?? null,
-        price_type_id: asUuidOrNull(commercial?.priceCategoryId),
-        price_seg_low: pricing?.econom ?? null,
-        price_seg_mid: pricing?.middle ?? null,
-        price_seg_high: body?.premium ?? 0,
-        is_working: contacts?.isActive ?? null,
-        is_cooperating: isCooperating,
-        sells_pillows: commercial?.sellsPillows ?? null,
-        contact_name: contacts?.contactName ?? null,
-        contact_position: contacts?.position ?? null,
-        contact_phone: contacts?.phone ?? null,
-        contact_email: contacts?.email ?? null,
-        tt_description: contacts?.ttDescription ?? null,
-        visit_result_note: note?.finalText ?? null,
-        drive_folder_id: visitFolder,
-      })
-      .select("id, drive_folder_id")
-      .single();
+    if (editId) {
+      const { data: updatedVisit, error: visitErr } = await supabase
+        .from("visits")
+        .update(visitData)
+        .eq("id", editId)
+        .select("id, drive_folder_id")
+        .single();
+      if (visitErr) throw visitErr;
+      visit = updatedVisit;
 
-    if (visitErr) throw visitErr;
+      // Delete old manufacturers and brands before inserting new ones
+      await supabase.from("visit_manufacturers").delete().eq("visit_id", visit.id);
+      await supabase.from("visit_brands").delete().eq("visit_id", visit.id);
+    } else {
+      const visitId = crypto.randomUUID();
+      const ymd = toYmd(visitDate);
+      const visitFolder = `orgs/${finalOrgId}/tt/${finalTTId}/visits/${ymd}_${visitId}/`;
+
+      const { data: newVisit, error: visitErr } = await supabase
+        .from("visits")
+        .insert({
+          ...visitData,
+          id: visitId,
+          drive_folder_id: visitFolder,
+        })
+        .select("id, drive_folder_id")
+        .single();
+
+      if (visitErr) throw visitErr;
+      visit = newVisit;
+    }
 
     // 4) manufacturers
     const mansSelected = (manufacturers?.selected || [])

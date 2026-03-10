@@ -50,6 +50,7 @@ import {
   Info,
   Loader2,
   Sparkles,
+  Eye,
 } from "lucide-react"
 
 // Заглушки — позже подтянем из БД
@@ -120,6 +121,10 @@ export function PassportPage() {
   const [searchParams] = useSearchParams()
   const ttIdParam = searchParams.get("ttId")
   const editIdParam = searchParams.get("editId")
+  const viewIdParam = searchParams.get("viewId")
+  const isViewOnly = !!viewIdParam
+  const effectiveEditId = editIdParam || viewIdParam
+
   const { profile, user } = useAuth()
   const MotionDiv = motion.div
   const [visitMeta, setVisitMeta] = useState({
@@ -279,6 +284,17 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 
     if (resetPhotos) {
       setPhotos([])
+    } else if (visit.visit_photos) {
+      const loadedPhotos = visit.visit_photos.map(p => {
+        const { data } = supabase.storage.from("visit-photos").getPublicUrl(p.file_path);
+        return {
+          id: p.id,
+          url: data.publicUrl,
+          file: null, // It's already on server
+          isExisting: true
+        };
+      });
+      setPhotos(loadedPhotos);
     }
 
     if (resetMeta) {
@@ -298,8 +314,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
 
   useEffect(() => {
     async function loadFromParams() {
-      // ===== Режим редактирования визита =====
-      if (editIdParam) {
+      // ===== Режим редактирования или просмотра визита =====
+      if (effectiveEditId) {
         const { data: visit, error } = await supabase
           .from("visits")
           .select(`
@@ -313,13 +329,14 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               full_name
             ),
             visit_manufacturers (*),
-            visit_brands (*)
+            visit_brands (*),
+            visit_photos (*)
           `)
-          .eq("id", editIdParam)
+          .eq("id", effectiveEditId)
           .single()
 
-          console.log("EDIT visit:", visit)
-          console.log("EDIT error:", error)
+          console.log("EDIT/VIEW visit:", visit)
+          console.log("EDIT/VIEW error:", error)
 
         if (visit && !error) {
           applyVisitToForm(visit, {
@@ -467,10 +484,10 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     }
 
     // чтобы hfBrands уже были загружены для корректного деления brand_id на hf/pm
-    if (editIdParam || ttIdParam) {
+    if (effectiveEditId || ttIdParam) {
       loadFromParams()
     }
-  }, [ttIdParam, editIdParam, hfBrands, profile])
+  }, [ttIdParam, effectiveEditId, hfBrands, profile])
 
   
   useEffect(() => {
@@ -810,6 +827,10 @@ empty
   }
   
   function goBack() {
+    if (isViewOnly) {
+      nav("/app/surveys/start")
+      return
+    }
     if (isFormEmpty) {
       nav("/app/surveys/start")
       return
@@ -1252,7 +1273,15 @@ empty
             </Button>
             <span>{visitMeta.date}</span>
           </div>
-          <span>{visitMeta.authorName}</span>
+          <div className="flex items-center gap-2">
+            {isViewOnly && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                <Eye className="h-3 w-3" />
+                <span>Режим перегляду</span>
+              </div>
+            )}
+            <span>{visitMeta.authorName}</span>
+          </div>
         </div>
 
         {/* Title + progress */}
@@ -1309,7 +1338,7 @@ empty
         </MotionDiv>
 
         {/* Організація та ТТ */}
-        <Section title="Організація та ТТ" zIndex={50}>
+        <Section title="Організація та ТТ" zIndex={50} disabled={isViewOnly}>
           <div className="space-y-4">
             {/* Організація: label + switch в одной строке */}
               <div className="space-y-3">
@@ -1504,7 +1533,7 @@ empty
               variant="outline"
               onClick={() => setContactsOpen(true)}
               className={cn(
-                "w-full h-12 rounded-2xl px-4 transition relative overflow-hidden",
+                "w-full h-12 rounded-2xl px-4 transition relative overflow-hidden pointer-events-auto",
                 "bg-white/[0.03] hover:bg-white/[0.06] border-white/10",
 
                 // glow red if empty, glow green if filled
@@ -1597,7 +1626,7 @@ empty
         </Section>
 
         {/* Адреса */}
-        <Section title="Адреса ТТ" zIndex={40}>
+        <Section title="Адреса ТТ" zIndex={40} disabled={isViewOnly}>
           <div className="space-y-4">
             <div className="grid gap-3">
               <AddressAutocomplete
@@ -1648,7 +1677,7 @@ empty
                   label="Вулиця"
                   value={address.street}
                   placeholder={address.cityRef ? "Вулиця…" : "Оберіть місто"}
-                  disabled={!address.cityRef}
+                  disabled={!address.cityRef || isViewOnly}
                   onChange={(v) => setAddress((s) => ({ ...s, street: v }))}
                   onSelect={(item) => {
                     const type = item.StreetsType || ""
@@ -1675,6 +1704,7 @@ empty
                   value={address.house}
                   onChange={(v) => setAddress((s) => ({ ...s, house: v }))}
                   placeholder="№"
+                  disabled={isViewOnly}
                 />
               </div>
             </div>
@@ -1689,7 +1719,7 @@ empty
                   : "shadow-[0_0_0_1px_rgba(239,68,68,0.35),0_0_18px_rgba(239,68,68,0.16)] hover:bg-white/[0.07]"
               )}
               onClick={requestGeo}
-              disabled={ui.geoLoading || !!address.geo}
+              disabled={ui.geoLoading || !!address.geo || isViewOnly}
             >
               {ui.geoLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1711,53 +1741,55 @@ empty
             {address.geo && (
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
                 <div className="text-sm text-muted-foreground">{address.geo.resolvedAddress}</div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={clearGeo}
-                  aria-label="Видалити гео"
-                  className="rounded-xl"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                {!isViewOnly && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearGeo}
+                    aria-label="Видалити гео"
+                    className="rounded-xl"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </Section>
 
         {/* Фото */}
-        <Section title="Фотозвіт" zIndex={30}>
+        <Section title="Фотозвіт" zIndex={30} disabled={isViewOnly}>
           <div className="space-y-3">
-            
-
             <div className="flex flex-wrap gap-3">
               {photos.map((p) => (
                 <div
                   key={p.id}
-                  className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
+                  className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] pointer-events-auto"
                 >
                   <button
                     type="button"
-                    className="h-full w-full"
+                    className="h-full w-full cursor-pointer"
                     onClick={() => setUI((s) => ({ ...s, photoPreview: p.url }))}
                     title="Переглянути"
                   >
                     <img src={p.url} alt="Фото" className="h-full w-full object-cover" />
                   </button>
 
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="absolute right-1 top-1 h-7 w-7 rounded-xl bg-black/40 hover:bg-black/55"
-                    onClick={() => removePhoto(p.id)}
-                    aria-label="Видалити фото"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
+                  {!isViewOnly && (
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="absolute right-1 top-1 h-7 w-7 rounded-xl bg-black/40 hover:bg-black/55"
+                      onClick={() => removePhoto(p.id)}
+                      aria-label="Видалити фото"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))}
 
-              {photos.length < 4 && (
+              {!isViewOnly && photos.length < 4 && (
                 <div className="relative">
                   <button 
                     type="button"
@@ -1789,7 +1821,7 @@ empty
         </Section>
 
         {/* Виробники */}
-        <Section title="Виробники на виставці" zIndex={20}>
+        <Section title="Виробники на виставці" zIndex={20} disabled={isViewOnly}>
           <div className="space-y-3">
             <LabeledSelect
               label=""
@@ -1950,11 +1982,11 @@ empty
 
         {/* Модельний ряд */}
         {isHighfoamSelected && (
-          <Section title="Модельний ряд" zIndex={10}>
+          <Section title="Модельний ряд" zIndex={10} disabled={false}>
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                className="justify-between h-14 rounded-2xl border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-300"
+                className="justify-between h-14 rounded-2xl border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-300 pointer-events-auto"
                 onClick={() => setHfModalOpen(true)}
               >
                 <div className="flex flex-col items-start">
@@ -1970,7 +2002,7 @@ empty
                 variant="outline"
                 disabled={pmBrands.length === 0}
                 className={cn(
-                  "justify-between h-14 rounded-2xl border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-300",
+                  "justify-between h-14 rounded-2xl border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-300 pointer-events-auto",
                   pmBrands.length === 0 && "opacity-40 grayscale"
                 )}
                 onClick={() => setPmModalOpen(true)}
@@ -1988,7 +2020,7 @@ empty
         )}
 
         {/* Цінові сегменти */}
-        <Section title="Цінові сегменти (%)" zIndex={10}>
+        <Section title="Цінові сегменти (%)" zIndex={10} disabled={isViewOnly}>
           <div className="space-y-4">
             <NumberSlider
               label="Економ"
@@ -2029,39 +2061,46 @@ empty
         {/* Примітка */}
         <Section 
           title="Коментар"
+          disabled={false}
           rightElement={
-            <Button
-              variant="ghost"
-              className={cn(
-                "h-9 px-3 rounded-xl transition-all duration-500 flex items-center gap-1.5",
-                ui.isRecording 
-                  ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.3)] border border-red-500/30" 
-                  : "bg-white/[0.05] hover:bg-white/[0.1] text-primary shadow-[0_0_10px_rgba(99,102,241,0.2)] border border-primary/20"
-              )}
-              onClick={ui.isRecording ? stopRecording : startRecording}
-              disabled={ui.isAiProcessing || ui.isSaving}
-            >
-              {ui.isRecording ? (
-                <>
-                  <div className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                  <span className="text-[10px] font-bold">REC</span>
-                </>
-              ) : (
-                <>
-                  <Mic className={cn("h-4 w-4", ui.isAiProcessing && "animate-spin")} />
-                  <span className="text-[10px] font-black tracking-tighter">AI</span>
-                </>
-              )}
-            </Button>
+            !isViewOnly && (
+              <Button
+                variant="ghost"
+                className={cn(
+                  "h-9 px-3 rounded-xl transition-all duration-500 flex items-center gap-1.5",
+                  ui.isRecording 
+                    ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.3)] border border-red-500/30" 
+                    : "bg-white/[0.05] hover:bg-white/[0.1] text-primary shadow-[0_0_10px_rgba(99,102,241,0.2)] border border-primary/20"
+                )}
+                onClick={ui.isRecording ? stopRecording : startRecording}
+                disabled={ui.isAiProcessing || ui.isSaving}
+              >
+                {ui.isRecording ? (
+                  <>
+                    <div className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                    <span className="text-[10px] font-bold">REC</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className={cn("h-4 w-4", ui.isAiProcessing && "animate-spin")} />
+                    <span className="text-[10px] font-black tracking-tighter">AI</span>
+                  </>
+                )}
+              </Button>
+            )
           }
         >
           <div className="space-y-3">
-            <div className="relative">
+            <div className="relative pointer-events-auto">
               <Textarea
                 value={note.finalText}
                 onChange={(e) => setNote((s) => ({ ...s, finalText: e.target.value }))}
                 placeholder="Введіть текст або диктуйте голосом…"
-                className="min-h-[140px] rounded-3xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40"
+                className={cn(
+                  "min-h-[140px] rounded-3xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 transition-all",
+                  isViewOnly && "bg-transparent border-white/5 text-white/80 cursor-default"
+                )}
+                readOnly={isViewOnly}
               />
               {ui.isAiProcessing && (
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-3xl flex items-center justify-center z-10">
@@ -2076,25 +2115,27 @@ empty
         </Section>
 
         {/* Save */}
-        <div className="pb-8">
-          <Button
-            className="w-full h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
-            onClick={saveReport}
-            disabled={ui.isSaving || ui.isAiProcessing}
-          >
-            {ui.isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Збереження...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Зберегти звіт
-              </>
-            )}
-          </Button>
-        </div>
+        {!isViewOnly && (
+          <div className="pb-8">
+            <Button
+              className="w-full h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
+              onClick={saveReport}
+              disabled={ui.isSaving || ui.isAiProcessing}
+            >
+              {ui.isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Збереження...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Зберегти звіт
+                </>
+              )}
+            </Button>
+          </div>
+        )}
 
         {/* ===== Dialogs ===== */}
 
@@ -2195,7 +2236,7 @@ empty
             <div className="glass rounded-[28px] border border-white/10 overflow-hidden">
               <DialogHeader className="px-5 pt-5 pb-3">
                 <DialogTitle className="text-sm font-semibold tracking-wide text-white/90 uppercase">
-                  Контактна інформація
+                  Контактна інформація {isViewOnly && "(Перегляд)"}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                   Введіть контактні дані представника торгової точки
@@ -2208,6 +2249,7 @@ empty
                   value={contactsDraft.contactName}
                   onChange={(e) => setContactsDraft((s) => ({ ...s, contactName: e.target.value }))}
                   placeholder="Контактна особа (ПІБ)"
+                  readOnly={isViewOnly}
                   className="h-12 rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40"
                 />
 
@@ -2215,26 +2257,31 @@ empty
                   value={contactsDraft.position}
                   onChange={(e) => setContactsDraft((s) => ({ ...s, position: e.target.value }))}
                   placeholder="Посада"
+                  readOnly={isViewOnly}
                   className="h-12 rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40"
                 />
 
                 <Input
                   value={contactsDraft.phone}
                   onChange={(e) => {
+                    if (isViewOnly) return
                     const formatted = formatPhone(e.target.value)
                     setContactsDraft((s) => ({ ...s, phone: formatted }))
                   }}
                   onFocus={() => {
+                    if (isViewOnly) return
                     if (!contactsDraft.phone) {
                       setContactsDraft((s) => ({ ...s, phone: "+38 " }))
                     }
                   }}
                   onBlur={() => {
+                    if (isViewOnly) return
                     if (contactsDraft.phone === "+38 ") {
                       setContactsDraft((s) => ({ ...s, phone: "" }))
                     }
                   }}
                   placeholder="Телефон (+38...)"
+                  readOnly={isViewOnly}
                   className={cn(
                     "h-12 rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40 transition-colors",
                     contactsDraft.phone && !isPhoneValid(contactsDraft.phone) && "border-red-500/50 focus-visible:ring-red-500/40 focus-visible:border-red-500/50 text-red-200"
@@ -2245,6 +2292,7 @@ empty
                   value={contactsDraft.email}
                   onChange={(e) => setContactsDraft((s) => ({ ...s, email: e.target.value }))}
                   placeholder="Email"
+                  readOnly={isViewOnly}
                   className={cn(
                     "h-12 rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40 transition-colors",
                     contactsDraft.email && !isEmailValid(contactsDraft.email) && "border-red-500/50 focus-visible:ring-red-500/40 focus-visible:border-red-500/50 text-red-200"
@@ -2255,13 +2303,18 @@ empty
                   value={contactsDraft.ttDescription}
                   onChange={(e) => setContactsDraft((s) => ({ ...s, ttDescription: e.target.value }))}
                   placeholder="Додаткові нотатки..."
+                  readOnly={isViewOnly}
                   className="min-h-[110px] rounded-2xl bg-white/[0.05] border-white/10 placeholder:text-white/40 focus-visible:ring-primary/40"
                 />
 
                 <ToggleRow
                   label="Точка працює?"
                   checked={contactsDraft.isActive}
-                  onCheckedChange={(v) => setContactsDraft((s) => ({ ...s, isActive: v }))}
+                  onCheckedChange={(v) => {
+                    if (isViewOnly) return
+                    setContactsDraft((s) => ({ ...s, isActive: v }))
+                  }}
+                  disabled={isViewOnly}
                 />
 
                 {/* Тип торгової точки */}
@@ -2278,12 +2331,15 @@ empty
                         <button
                           key={t.id}
                           type="button"
+                          disabled={isViewOnly}
                           onClick={() => setContactsDraft((s) => ({ ...s, ttTypeId: t.id }))}
                           className={cn(
                             "relative h-11 rounded-2xl border text-sm transition overflow-hidden",
                             active
                               ? "border-primary/50 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3),0_10px_30px_rgba(99,102,241,0.25)]"
-                              : "border-white/10 bg-white/[0.05] text-white/75 hover:bg-white/[0.08]"
+                              : "border-white/10 bg-white/[0.05] text-white/75 hover:bg-white/[0.08]",
+                            isViewOnly && active && "opacity-100",
+                            isViewOnly && !active && "opacity-40"
                           )}
                         >
                           {active && (
@@ -2300,31 +2356,40 @@ empty
                 {/* Buttons */}
                 <div className="pt-5 space-y-3">
                   {/* Save */}
-                  <Button
-                    disabled={
-                      (contactsDraft.email && !isEmailValid(contactsDraft.email)) ||
-                      (contactsDraft.phone && !isPhoneValid(contactsDraft.phone)) ||
-                      !contactsDraft.ttTypeId
-                    }
-                    onClick={() => {
-                      setContacts({ ...contactsDraft })
-                      setContactsOpen(false)
-                    }}
-                    className="w-full h-11 rounded-2xl text-base font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Зберегти
-                  </Button>
+                  {!isViewOnly && (
+                    <Button
+                      disabled={
+                        (contactsDraft.email && !isEmailValid(contactsDraft.email)) ||
+                        (contactsDraft.phone && !isPhoneValid(contactsDraft.phone)) ||
+                        !contactsDraft.ttTypeId
+                      }
+                      onClick={() => {
+                        setContacts({ ...contactsDraft })
+                        setContactsOpen(false)
+                      }}
+                      className="w-full h-11 rounded-2xl text-base font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Зберегти
+                    </Button>
+                  )}
 
-                  {/* Cancel */}
+                  {/* Cancel / Close */}
                   <Button
-                    variant="secondary"
-                    className="w-full h-11 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)] transition-all duration-300"
+                    variant="ghost"
                     onClick={() => {
-                      setContactsDraft({ ...contacts })
+                      if (!isViewOnly) {
+                        setContactsDraft({ ...contacts })
+                      }
                       setContactsOpen(false)
                     }}
+                    className={cn(
+                      "w-full h-11 rounded-2xl transition-all duration-300",
+                      isViewOnly 
+                        ? "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                        : "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                    )}
                   >
-                    Скасувати
+                    {isViewOnly ? "Закрити" : "Скасувати"}
                   </Button>
                 </div>
               </div>
@@ -2358,6 +2423,7 @@ empty
           </DialogContent>
         </Dialog>
       </div>
+
       <BrandSelectionModal
         key={`hf-${hfModalOpen}`}
         open={hfModalOpen}
@@ -2365,6 +2431,7 @@ empty
         title="Моделі Highfoam"
         brands={hfBrands}
         selectedIds={modelRange.selectedHfBrandIds}
+        isViewOnly={isViewOnly}
         onConfirm={(newList) => {
           setModelRange(s => ({ 
             ...s, 
@@ -2381,6 +2448,7 @@ empty
         title="Private Label"
         brands={pmBrands}
         selectedIds={modelRange.selectedPmBrandIds}
+        isViewOnly={isViewOnly}
         onConfirm={(newList) => {
           setModelRange(s => ({ 
             ...s, 
@@ -2395,10 +2463,11 @@ empty
 
 /* ====== Small UI helpers ====== */
 
-function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, onConfirm }) {
+function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, onConfirm, isViewOnly }) {
   const [localSelected, setLocalSelected] = useState([...selectedIds])
 
   const toggleBrand = (id) => {
+    if (isViewOnly) return
     setLocalSelected(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     )
@@ -2410,7 +2479,7 @@ function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, o
         <div className="glass rounded-[28px] border border-white/10 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle className="text-sm font-semibold tracking-wide text-white/90 uppercase">
-              {title}
+              {title} {isViewOnly && "(Перегляд)"}
             </DialogTitle>
           </DialogHeader>
           
@@ -2422,17 +2491,21 @@ function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, o
                   <button
                     key={brand.id}
                     type="button"
+                    disabled={isViewOnly && !active}
                     onClick={() => toggleBrand(brand.id)}
                     className={cn(
                       "relative h-11 rounded-2xl border text-[13px] font-bold transition overflow-hidden",
                       active
                         ? "border-primary/50 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3),0_10px_30px_rgba(99,102,241,0.25)]"
-                        : "border-white/10 bg-white/[0.05] text-white/75 hover:bg-white/[0.08]"
+                        : "border-white/10 bg-white/[0.05] text-white/75 hover:bg-white/[0.08]",
+                      isViewOnly && active && "opacity-100",
+                      isViewOnly && !active && "opacity-40"
                     )}
                   >
                     {active && (
                       <span className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500" />
                     )}
+
                     <span className="relative">{brand.name}</span>
                   </button>
                 )
@@ -2440,22 +2513,29 @@ function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, o
             </div>
 
             <div className="pt-6 space-y-3">
-              <Button 
-                className="w-full h-11 rounded-2xl text-base font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all duration-300"
-                onClick={() => {
-                  onConfirm(localSelected)
-                  onOpenChange(false)
-                }}
-              >
-                Зберегти
-              </Button>
+              {!isViewOnly && (
+                <Button 
+                  className="w-full h-11 rounded-2xl text-base font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all duration-300"
+                  onClick={() => {
+                    onConfirm(localSelected)
+                    onOpenChange(false)
+                  }}
+                >
+                  Зберегти
+                </Button>
+              )}
 
               <Button
-                variant="secondary"
-                className="w-full h-11 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)] transition-all duration-300"
+                variant={isViewOnly ? "ghost" : "secondary"}
+                className={cn(
+                  "w-full h-11 rounded-2xl transition-all duration-300",
+                  isViewOnly 
+                    ? "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    : "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                )}
                 onClick={() => onOpenChange(false)}
               >
-                Скасувати
+                {isViewOnly ? "Закрити" : "Скасувати"}
               </Button>
             </div>
           </div>
@@ -2465,7 +2545,7 @@ function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, o
   )
 }
 
-function Section({ title, children, rightElement, zIndex }) {
+function Section({ title, children, rightElement, zIndex, disabled }) {
   const MotionDiv = motion.div;
   return (
     <MotionDiv
@@ -2474,6 +2554,7 @@ function Section({ title, children, rightElement, zIndex }) {
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.4, ease: "easeOut" }}
       style={{ zIndex, position: zIndex ? "relative" : undefined }}
+      className={cn(disabled && "pointer-events-none opacity-90")}
     >
       <Card className="glass rounded-3xl">
         <CardContent className="pt-5 space-y-4">
@@ -2482,7 +2563,7 @@ function Section({ title, children, rightElement, zIndex }) {
               <div className="h-1 w-1 rounded-full bg-primary" />
               {title}
             </div>
-            {rightElement}
+            {!disabled && rightElement}
           </div>
           {children}
         </CardContent>
