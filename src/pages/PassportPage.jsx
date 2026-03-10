@@ -62,6 +62,13 @@ const CHART_COLORS = [
   "#8b5cf6", // Violet
 ]
 
+function ymdToUa(ymd) {
+  if (!ymd) return "—"
+  const [yyyy, mm, dd] = String(ymd).split("-")
+  if (!yyyy || !mm || !dd) return "—"
+  return `${dd}.${mm}.${yyyy}`
+}
+
 function todayUA() {
   const d = new Date()
   const dd = String(d.getDate()).padStart(2, "0")
@@ -288,10 +295,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
       })
     } else {
       setVisitMeta({
-        date: visit.visited_at
-          ? new Date(visit.visited_at).toLocaleDateString("uk-UA")
-          : todayUA(),
-        authorName: visit.author?.full_name || profile?.full_name || "—",
+        date: ymdToUa(visit.visited_at),
+        authorName: visit.author?.full_name ?? "—",
       })
     }
   }
@@ -403,8 +408,9 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               *,
               org:org_id (*)
             ),
-            author:author_user_id (
+            author:user_profiles!visits_author_user_id_fkey (
               full_name
+            ),
             ),
             visit_manufacturers (*),
             visit_brands (*)
@@ -412,9 +418,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
           .eq("id", editIdParam)
           .single()
 
-          console.log("EDIT visit:", visit)
-          console.log("EDIT error:", error)
-
+          
         if (visit && !error) {
           applyVisitToForm(visit, {
             resetMeta: false,
