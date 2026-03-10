@@ -403,7 +403,8 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
               *,
               org:org_id (*)
             ),
-            author:author_user_id (
+            author:user_profiles!visits_author_user_id_fkey (
+              user_id,
               full_name
             ),
             visit_manufacturers (*),
