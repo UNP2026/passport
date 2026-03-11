@@ -24,6 +24,21 @@ function toYmd(d) {
   return dt.toISOString().slice(0, 10);
 }
 
+function toIsoDate(d) {
+  if (!d) return new Date().toISOString();
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) {
+    // Try parsing DD.MM.YYYY
+    const m = String(d).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (m) {
+      const [, dd, mm, yyyy] = m;
+      return new Date(`${yyyy}-${mm}-${dd}`).toISOString();
+    }
+    return new Date().toISOString();
+  }
+  return dt.toISOString();
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -51,7 +66,7 @@ export default async function handler(req, res) {
   const userId = userData.user.id;
 
   const body = req.body || {};
-  const { orgTT, address, contacts, commercial, manufacturers, modelRange, pricing, note, visitDate } = body;
+  const { orgTT, address, contacts, commercial, manufacturers, modelRange, pricing, note, visitDate, editId } = body;
 
   try {
     const orgName = orgTT?.orgNameNew || orgTT?.orgQuery;
