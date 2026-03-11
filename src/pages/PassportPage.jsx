@@ -52,6 +52,8 @@ import {
   Sparkles,
   Eye,
   Pencil,
+  Calendar,
+  User,
 } from "lucide-react"
 
 // Заглушки — позже подтянем из БД
@@ -1263,37 +1265,28 @@ empty
   return (
     <div className="min-h-screen px-4 py-4 flex justify-center glow">
       <div className="w-full max-w-[640px] space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goBack}
-              aria-label="Назад"
-              className="rounded-full"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <span>{visitMeta.date}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>{visitMeta.authorName}</span>
-          </div>
-        </div>
-
         {/* Title + progress */}
         <MotionDiv 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass rounded-3xl p-4"
         >
-          <div className="text-xl font-semibold leading-tight">Звіт ТТ</div>
-          <div className={cn(
-            "text-[13px] font-medium",
-            isViewOnly ? "text-cyan-400" : editIdParam ? "text-amber-400" : "text-emerald-400"
-          )}>
-            {isViewOnly ? "Перегляд звіту" : editIdParam ? "Редагування звіту" : "Новий звіт"}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span className="text-white/80">{visitMeta.date}</span>
+            </div>
+            <div className={cn(
+              "text-[13px] font-medium",
+              isViewOnly ? "text-cyan-400" : editIdParam ? "text-amber-400" : "text-emerald-400"
+            )}>
+              {isViewOnly ? "Перегляд звіту" : editIdParam ? "Редагування звіту" : "Новий звіт"}
+            </div>
+          </div>
+
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <User className="h-3 w-3" />
+            <span className="text-white/80">{visitMeta.authorName}</span>
           </div>
 
           <div className="mt-4 space-y-2">
@@ -2194,10 +2187,20 @@ empty
         </Section>
 
         {/* Save */}
+        {/* Save Button */}
         {!isViewOnly && (
-          <div className="pb-8">
+          <div className="flex gap-3 pb-8">
             <Button
-              className="w-full h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
+              variant="outline"
+              className="w-16 h-12 shrink-0 rounded-2xl border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500 hover:text-white transition-all duration-300"
+              onClick={goBack}
+              disabled={ui.isSaving || ui.isAiProcessing}
+              title="Назад"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <Button
+              className="flex-1 h-12 text-base font-semibold gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300"
               onClick={saveReport}
               disabled={ui.isSaving || ui.isAiProcessing}
             >
@@ -2212,6 +2215,19 @@ empty
                   Зберегти звіт
                 </>
               )}
+            </Button>
+          </div>
+        )}
+
+        {isViewOnly && (
+          <div className="pb-8">
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-2xl border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500 hover:text-white transition-all duration-300"
+              onClick={goBack}
+            >
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              Повернутися
             </Button>
           </div>
         )}
