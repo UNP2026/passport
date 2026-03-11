@@ -1278,12 +1278,6 @@ empty
             <span>{visitMeta.date}</span>
           </div>
           <div className="flex items-center gap-2">
-            {isViewOnly && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                <Eye className="h-3 w-3" />
-                <span>Режим перегляду</span>
-              </div>
-            )}
             <span>{visitMeta.authorName}</span>
           </div>
         </div>
@@ -1295,7 +1289,12 @@ empty
           className="glass rounded-3xl p-4"
         >
           <div className="text-xl font-semibold leading-tight">Звіт ТТ</div>
-          <div className="text-sm text-muted-foreground">Нова торгова точка</div>
+          <div className={cn(
+            "text-[13px] font-medium",
+            isViewOnly ? "text-cyan-400" : editIdParam ? "text-amber-400" : "text-emerald-400"
+          )}>
+            {isViewOnly ? "Перегляд звіту" : editIdParam ? "Редагування звіту" : "Новий звіт"}
+          </div>
 
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">
