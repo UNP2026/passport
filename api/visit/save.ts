@@ -26,16 +26,25 @@ function toYmd(d) {
 
 function toIsoDate(d) {
   if (!d) return new Date().toISOString();
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) {
-    // Try parsing DD.MM.YYYY
-    const m = String(d).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-    if (m) {
-      const [, dd, mm, yyyy] = m;
-      return new Date(`${yyyy}-${mm}-${dd}`).toISOString();
-    }
-    return new Date().toISOString();
+  
+  // 1) Сначала проверяем наш формат DD.MM.YYYY, чтобы JS не перепутал день и месяц
+  const m = String(d).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m) {
+    const [, dd, mm, yyyy] = m;
+    // Создаем дату в формате YYYY-MM-DD (ISO), который JS понимает однозначно
+    // Ставим полдень (12:00), чтобы избежать проблем со смещением часовых поясов
+    return new Date(`${yyyy}-${mm}-${dd}T12:00:00Z`).toISOString();
   }
+
+  // 2) Если это уже ISO (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}/.test(d)) {
+    const dt = new Date(d);
+    if (!isNaN(dt.getTime())) return dt.toISOString();
+  }
+
+  // 3) Запасной вариант
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return new Date().toISOString();
   return dt.toISOString();
 }
 
