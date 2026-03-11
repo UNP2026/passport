@@ -51,6 +51,7 @@ import {
   Loader2,
   Sparkles,
   Eye,
+  Pencil,
 } from "lucide-react"
 
 // Заглушки — позже подтянем из БД
@@ -502,6 +503,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     loadPM()
   }, [orgTT.selectedOrgId])
 
+  const [isAddressEditing, setIsAddressEditing] = useState(false)
   const [address, setAddress] = useState({
     city: "",
     cityRef: "",
@@ -1255,6 +1257,8 @@ empty
   return parts.join(" · ")
 }, [contacts, ttTypesList])
 
+  const isAddressFieldsDisabled = isViewOnly || (Boolean(orgTT.selectedTTId) && !isAddressEditing);
+
   // ===== UI =====
   return (
     <div className="min-h-screen px-4 py-4 flex justify-center glow">
@@ -1626,13 +1630,35 @@ empty
         </Section>
 
         {/* Адреса */}
-        <Section title="Адреса ТТ" zIndex={40} disabled={isViewOnly}>
+        <Section 
+          title="Адреса ТТ" 
+          zIndex={40} 
+          disabled={isViewOnly}
+          rightElement={orgTT.selectedTTId && !isViewOnly && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsAddressEditing(!isAddressEditing)}
+              className={cn(
+                "h-7 px-2.5 gap-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all",
+                isAddressEditing 
+                  ? "bg-primary/20 text-primary hover:bg-primary/30" 
+                  : "text-white/40 hover:text-white/70 hover:bg-white/5"
+              )}
+            >
+              <Pencil className="h-3 w-3" />
+              {isAddressEditing ? "Завершити" : "Редагувати"}
+            </Button>
+          )}
+        >
           <div className="space-y-4">
             <div className="grid gap-3">
               <AddressAutocomplete
                 label="Місто"
                 value={address.city}
                 placeholder="Почніть вводити місто…"
+                disabled={isAddressFieldsDisabled}
                 onChange={(v) => {
                   if (!v) {
                     setAddress((s) => ({ ...s, city: "", cityRef: "", street: "" }))
@@ -1676,8 +1702,8 @@ empty
                 <AddressAutocomplete
                   label="Вулиця"
                   value={address.street}
-                  placeholder={address.cityRef ? "Вулиця…" : "Оберіть місто"}
-                  disabled={!address.cityRef || isViewOnly}
+                  placeholder={address.city || address.cityRef ? "Вулиця…" : "Оберіть місто"}
+                  disabled={isAddressFieldsDisabled || (!address.city && !address.cityRef)}
                   onChange={(v) => setAddress((s) => ({ ...s, street: v }))}
                   onSelect={(item) => {
                     const type = item.StreetsType || ""
@@ -1704,7 +1730,7 @@ empty
                   value={address.house}
                   onChange={(v) => setAddress((s) => ({ ...s, house: v }))}
                   placeholder="№"
-                  disabled={isViewOnly}
+                  disabled={isAddressFieldsDisabled}
                 />
               </div>
             </div>
@@ -2572,7 +2598,7 @@ function Section({ title, children, rightElement, zIndex, disabled }) {
   )
 }
 
-function LabeledInput({ label, value, onChange, placeholder }) {
+function LabeledInput({ label, value, onChange, placeholder, disabled }) {
   return (
     <div className="space-y-1.5">
       {label ? <Label className="text-xs text-muted-foreground ml-1">{label}</Label> : null}
@@ -2580,6 +2606,7 @@ function LabeledInput({ label, value, onChange, placeholder }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        disabled={disabled}
         className="rounded-2xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all duration-300"
       />
     </div>

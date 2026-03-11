@@ -150,6 +150,18 @@ export default async function handler(req, res) {
       throw new Error("Торгова точка не визначена. Будь ласка, оберіть або введіть назву ТТ.");
     }
 
+    // Update TT address if it's an existing TT and address is provided
+    if (finalTTId && address) {
+      await supabase
+        .from("tt")
+        .update({
+          city: address.city || null,
+          street: address.street || null,
+          house: address.house || null,
+        })
+        .eq("id", finalTTId);
+    }
+
     const ttTypeId = asUuidOrNull(contacts?.ttTypeId);
     if (!ttTypeId) {
       throw new Error("Тип торгової точки не обрано. Будь ласка, вкажіть тип ТТ у розділі 'Контакти'.");
