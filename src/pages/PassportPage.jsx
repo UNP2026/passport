@@ -1384,6 +1384,34 @@ empty
                   value={orgTT.orgQuery}
                   placeholder="Почніть вводити назву…"
                   minChars={0}
+                  className={cn(
+                    orgTT.orgQuery && !orgTT.selectedOrgId && "border-red-500/50 focus-visible:ring-red-500/40 focus-visible:border-red-500/60"
+                  )}
+                  onBlur={() => {
+                    // Даем небольшую задержку, чтобы клик по подсказке успел сработать
+                    setTimeout(() => {
+                      setOrgTT((s) => {
+                        if (s.orgMode === "select" && !s.selectedOrgId && s.orgQuery) {
+                          setAddress({
+                            city: "",
+                            cityRef: "",
+                            street: "",
+                            house: "",
+                            geo: null,
+                            address_text: "",
+                          })
+                          return {
+                            ...s,
+                            orgQuery: "",
+                            selectedOrgId: null,
+                            selectedTTId: null,
+                            ttQuery: "",
+                          }
+                        }
+                        return s;
+                      })
+                    }, 200);
+                  }}
                   onChange={(v) => {
                     setOrgTT((s) => ({
                       ...s,
@@ -1490,6 +1518,32 @@ empty
                   placeholder={orgTT.selectedOrgId ? "Почніть вводити назву ТТ…" : "Спочатку оберіть організацію"}
                   disabled={!orgTT.selectedOrgId}
                   minChars={0}
+                  className={cn(
+                    orgTT.ttQuery && !orgTT.selectedTTId && "border-red-500/50 focus-visible:ring-red-500/40 focus-visible:border-red-500/60"
+                  )}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setOrgTT((s) => {
+                        if (s.ttMode === "select" && !s.selectedTTId && s.ttQuery) {
+                          // Также чистим адрес если ТТ не выбрана
+                          setAddress({
+                            city: "",
+                            cityRef: "",
+                            street: "",
+                            house: "",
+                            geo: null,
+                            address_text: "",
+                          })
+                          return {
+                            ...s,
+                            ttQuery: "",
+                            selectedTTId: null,
+                          }
+                        }
+                        return s;
+                      })
+                    }, 200);
+                  }}
                   onChange={(v) => {
                     setOrgTT((s) => ({
                       ...s,
@@ -2647,7 +2701,7 @@ function ToggleRow({ label, checked, onCheckedChange, className }) {
   )
 }
 
-function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestions, placeholder, disabled, minChars = 2 }) {
+function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestions, placeholder, disabled, minChars = 2, onBlur, className }) {
   const [search, setSearch] = useState(value)
   const [suggestions, setSuggestions] = useState([])
   const [isOpen, setIsOpen] = useState(false)
@@ -2709,8 +2763,12 @@ function AddressAutocomplete({ label, value, onSelect, onChange, fetchSuggestion
             if (onChange) onChange(val)
           }}
           onFocus={() => setIsOpen(true)}
+          onBlur={onBlur}
           placeholder={placeholder}
-          className="rounded-2xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all duration-300 pr-10"
+          className={cn(
+            "rounded-2xl bg-white/[0.03] border-white/10 focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all duration-300 pr-10",
+            className
+          )}
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
