@@ -7,7 +7,7 @@ import { getPriceCategories } from "@/api/prices"
 import { getManufacturers } from "@/api/manufacturers"
 import { getHighfoamBrands, getPrivateLabelBrands } from "@/api/brands"
 import { cn } from "@/lib/utils"
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useAuth } from "../hooks/useAuth"
 import { motion, AnimatePresence } from "framer-motion"
@@ -206,7 +206,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     loadInitialData()
   }, [])
 
-  function applyVisitToForm(visit, options = {}) {
+  const applyVisitToForm = useCallback((visit, options = {}) => {
     const {
       resetMeta = false,
       resetGeo = false,
@@ -313,7 +313,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
         authorName: visit.author?.full_name || profile?.full_name || "—",
       })
     }
-  }
+  }, [profile])
 
   useEffect(() => {
     async function loadFromParams() {
@@ -490,7 +490,7 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     if (effectiveEditId || ttIdParam) {
       loadFromParams()
     }
-  }, [ttIdParam, effectiveEditId, hfBrands, profile])
+  }, [ttIdParam, effectiveEditId, hfBrands, profile, applyVisitToForm])
 
   
   useEffect(() => {
@@ -2063,7 +2063,7 @@ empty
               >
                 <div className="flex flex-col items-start">
                   <span className="font-bold text-[13px] text-white/90">Highfoam</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Бренди</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Моделі</span>
                 </div>
                 <Badge className="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold">
                   {modelRange.selectedHfBrandIds.length}
@@ -2081,7 +2081,7 @@ empty
               >
                 <div className="flex flex-col items-start">
                   <span className="font-bold text-[13px] text-white/90">Private Label</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Бренди</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Моделі</span>
                 </div>
                 <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
                   {modelRange.selectedPmBrandIds.length}
@@ -2328,8 +2328,8 @@ empty
         {/* Contacts modal — draft + cancel/confirm */}
         <Dialog open={contactsOpen} onOpenChange={setContactsOpen}>
           <DialogContent className="p-0 border-none bg-transparent shadow-none sm:max-w-[520px]">
-            <div className="glass rounded-[28px] border border-white/10 overflow-hidden">
-              <DialogHeader className="px-5 pt-5 pb-3">
+            <div className="glass rounded-[28px] border border-white/10 overflow-y-auto max-h-[90vh] flex flex-col">
+              <DialogHeader className="px-5 pt-5 pb-3 shrink-0">
                 <DialogTitle className="text-sm font-semibold tracking-wide text-white/90 uppercase">
                   Контактна інформація {isViewOnly && "(Перегляд)"}
                 </DialogTitle>
@@ -2339,7 +2339,7 @@ empty
               </DialogHeader>
 
               {/* Body */}
-              <div className="px-5 pb-5 space-y-3">
+              <div className="px-5 pb-5 space-y-3 shrink-0">
                 <Input
                   value={contactsDraft.contactName}
                   onChange={(e) => setContactsDraft((s) => ({ ...s, contactName: e.target.value }))}
@@ -2571,14 +2571,14 @@ function BrandSelectionModal({ open, onOpenChange, title, brands, selectedIds, o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 border-none bg-transparent shadow-none sm:max-w-[420px]">
-        <div className="glass rounded-[28px] border border-white/10 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2">
+        <div className="glass rounded-[28px] border border-white/10 overflow-y-auto max-h-[90vh] flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle className="text-sm font-semibold tracking-wide text-white/90 uppercase">
               {title} {isViewOnly && "(Перегляд)"}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 shrink-0">
             <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
               {brands.map((brand) => {
                 const active = localSelected.includes(brand.id)

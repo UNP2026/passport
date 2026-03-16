@@ -1,13 +1,32 @@
 import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "./navItems";
+import { useAuth } from "../hooks/useAuth";
+import { BarChart3, Map as MapIcon, Calendar, User, ClipboardList } from "lucide-react";
+
+const ICON_MAP = {
+  surveys: ClipboardList,
+  map: MapIcon,
+  plan: Calendar,
+  analytics: BarChart3,
+  profile: User,
+};
 
 export function BottomNav() {
+  const { profile } = useAuth();
+  const isAdminOrHead = profile?.role === "admin" || profile?.role === "head";
+
+  const filteredItems = NAV_ITEMS.filter(it => {
+    if (it.key === "analytics") return isAdminOrHead;
+    return true;
+  });
+
   return (
-    <div style={styles.wrap}>
-      {NAV_ITEMS.map((it) => {
+    <div style={{ ...styles.wrap, gridTemplateColumns: `repeat(${filteredItems.length}, 1fr)` }}>
+      {filteredItems.map((it) => {
+        const Icon = ICON_MAP[it.key] || ClipboardList;
         const content = (
           <>
-            <div style={styles.icon}>●</div>
+            <Icon className="h-5 w-5" />
             <div style={styles.label}>{it.label}</div>
           </>
         );
@@ -57,6 +76,5 @@ const styles = {
     gap: 4,
     fontSize: 11,
   },
-  icon: { fontSize: 14, lineHeight: "14px" }, // пока точка, позже заменим на Lucide
   label: { opacity: 0.9 },
 };

@@ -5,7 +5,7 @@ export async function searchTT(orgId, query) {
 
   let q = supabase
     .from("tt")
-    .select("id, org_id, name, city, street, house")
+    .select("id, org_id, name, city, street, house, lat, lng")
     .eq("org_id", orgId)
     .order("name")
     .limit(20)
@@ -28,7 +28,7 @@ export async function getTTById(ttId) {
 
   const { data, error } = await supabase
     .from("tt")
-    .select("id, org_id, name, city, street, house")
+    .select("id, org_id, name, city, street, house, lat, lng")
     .eq("id", ttId)
     .maybeSingle()
 

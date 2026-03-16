@@ -70,7 +70,7 @@ export function ExistingPointsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -104,6 +104,7 @@ export function ExistingPointsPage() {
 
     // Group by Org
     const orgMap = {};
+    const cityMap = {};
     allTTs.forEach(item => {
       const orgId = item.tt?.org?.id || "no-org";
       const orgName = item.tt?.org?.name || "Без організації";
@@ -116,11 +117,23 @@ export function ExistingPointsPage() {
         };
       }
       orgMap[orgId].tts.push(item);
+
+      const cityName = item.tt?.city || "Без міста";
+      const cityId = cityName; // using name as ID for cities
+      if (!cityMap[cityId]) {
+        cityMap[cityId] = {
+          id: cityId,
+          name: cityName,
+          tts: []
+        };
+      }
+      cityMap[cityId].tts.push(item);
     });
 
     return {
       allTTs: allTTs.sort((a, b) => b.lastVisit.id - a.lastVisit.id),
-      orgs: Object.values(orgMap).sort((a, b) => a.name.localeCompare(b.name))
+      orgs: Object.values(orgMap).sort((a, b) => a.name.localeCompare(b.name)),
+      cities: Object.values(cityMap).sort((a, b) => a.name.localeCompare(b.name))
     };
   }, [visits]);
 
@@ -134,7 +147,7 @@ export function ExistingPointsPage() {
         (item.tt.city || "").toLowerCase().includes(query) ||
         (item.tt.street || "").toLowerCase().includes(query)
       );
-    } else {
+    } else if (viewMode === "orgs") {
       return processedData.orgs.map(org => ({
         ...org,
         tts: org.tts.filter(item => 
@@ -143,6 +156,15 @@ export function ExistingPointsPage() {
           (item.tt.street || "").toLowerCase().includes(query)
         )
       })).filter(org => org.tts.length > 0 || org.name.toLowerCase().includes(query));
+    } else if (viewMode === "cities") {
+      return processedData.cities.map(city => ({
+        ...city,
+        tts: city.tts.filter(item => 
+          item.tt.name.toLowerCase().includes(query) || 
+          (item.tt.org?.name || "").toLowerCase().includes(query) ||
+          (item.tt.street || "").toLowerCase().includes(query)
+        )
+      })).filter(city => city.tts.length > 0 || city.name.toLowerCase().includes(query));
     }
   }, [processedData, searchQuery, viewMode]);
 
@@ -214,65 +236,98 @@ export function ExistingPointsPage() {
             />
           </div>
 
-          <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10">
+          <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10 relative">
             <button
               onClick={() => setViewMode("orgs")}
               className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-xl transition-all",
-                viewMode === "orgs" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"
+                "flex-1 py-2 text-sm font-medium rounded-xl transition-all relative z-10",
+                viewMode === "orgs" ? "text-white" : "text-muted-foreground hover:text-white"
               )}
             >
-              По організаціям
+              {viewMode === "orgs" && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-primary rounded-xl shadow-lg"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+              <span className="relative z-20">По організаціям</span>
+            </button>
+            <button
+              onClick={() => setViewMode("cities")}
+              className={cn(
+                "flex-1 py-2 text-sm font-medium rounded-xl transition-all relative z-10",
+                viewMode === "cities" ? "text-white" : "text-muted-foreground hover:text-white"
+              )}
+            >
+              {viewMode === "cities" && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-primary rounded-xl shadow-lg"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+              <span className="relative z-20">По містах</span>
             </button>
             <button
               onClick={() => setViewMode("all")}
               className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-xl transition-all",
-                viewMode === "all" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"
+                "flex-1 py-2 text-sm font-medium rounded-xl transition-all relative z-10",
+                viewMode === "all" ? "text-white" : "text-muted-foreground hover:text-white"
               )}
             >
-              Всі точки
+              {viewMode === "all" && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-primary rounded-xl shadow-lg"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+              <span className="relative z-20">Всі точки</span>
             </button>
           </div>
         </div>
 
         {/* Content */}
         <div className="space-y-4">
-          {viewMode === "orgs" ? (
+          {viewMode === "orgs" || viewMode === "cities" ? (
             <AnimatePresence mode="popLayout">
-              {filteredData.map((org) => (
+              {filteredData.map((group) => (
                 <motion.div
-                  key={org.id}
+                  key={group.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   className="space-y-2"
                 >
                   <button
-                    onClick={() => toggleOrg(org.id)}
+                    onClick={() => toggleOrg(group.id)}
                     className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/10 hover:bg-white/5 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                        <Building2 className="h-5 w-5" />
+                        {viewMode === "orgs" ? <Building2 className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
                       </div>
                       <div className="text-left">
-                        <div className="font-bold text-white">{org.name}</div>
-                        <div className="text-xs text-muted-foreground">{org.tts.length} ТТ</div>
+                        <div className="font-bold text-white">{group.name}</div>
+                        <div className="text-xs text-muted-foreground">{group.tts.length} ТТ</div>
                       </div>
                     </div>
-                    {expandedOrgs[org.id] ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+                    {expandedOrgs[group.id] ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
                   </button>
 
                   <AnimatePresence>
-                    {expandedOrgs[org.id] && (
+                    {expandedOrgs[group.id] && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden space-y-2 pl-4 border-l-2 border-white/5 ml-5"
                       >
-                        {org.tts.map((item) => (
+                        {group.tts.map((item) => (
                           <TTCard key={item.tt.id} item={item} isEditable={isEditable} nav={nav} />
                         ))}
                       </motion.div>

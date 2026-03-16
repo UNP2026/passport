@@ -7,6 +7,8 @@ import { SurveysStartPage } from "./pages/SurveysStartPage";
 import { ExistingPointsPage } from "./pages/ExistingPointsPage";
 import { PassportPage } from "./pages/PassportPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { MapPage } from "./pages/MapPage";
 
 export default function App() {
   return (
@@ -28,9 +30,9 @@ export default function App() {
           <Route path="surveys/new" element={<PassportPage />} />
 
           {/* будущие страницы */}
-          <Route path="map" element={<div style={{ padding: 20 }}>Карта (скоро)</div>} />
+          <Route path="map" element={<MapPage />} />
           <Route path="plan" element={<div style={{ padding: 20 }}>План (скоро)</div>} />
-          <Route path="analytics" element={<div style={{ padding: 20 }}>Аналітика (скоро)</div>} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
           <Route path="*" element={<Navigate to="/app/surveys/start" replace />} />

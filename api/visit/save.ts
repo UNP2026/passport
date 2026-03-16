@@ -48,6 +48,28 @@ function toIsoDate(d) {
   return dt.toISOString();
 }
 
+async function geocodeAddress(city, street, house) {
+  if (!city || !street) return null;
+  const query = `${city}, ${street} ${house || ''}`.trim();
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'CRM-UNP-App/1.0'
+      }
+    });
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
+      };
+    }
+  } catch (e) {
+    console.error("Geocoding error:", e);
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -120,11 +142,15 @@ export default async function handler(req, res) {
     }
 
     // 2) TT create (если нужно) — генерируем id заранее и пишем drive_folder_id сразу
+    let finalGeo = null;
+
     if (!finalTTId && ttName) {
       if (!finalOrgId) throw new Error("org_id is required to create TT");
 
       const ttId = crypto.randomUUID();
       const ttFolder = `orgs/${finalOrgId}/tt/${ttId}/`;
+
+      finalGeo = await geocodeAddress(address?.city, address?.street, address?.house);
 
       const { data: newTT, error: ttErr } = await supabase
         .from("tt")
@@ -135,6 +161,8 @@ export default async function handler(req, res) {
           city: address?.city ?? null,
           street: address?.street ?? null,
           house: address?.house ?? null,
+          lat: finalGeo?.lat ?? null,
+          lng: finalGeo?.lng ?? null,
           is_active: true,
           drive_folder_id: ttFolder,
           // created_by у тебя ставится default/trigger’ом, руками можно не передавать
@@ -152,13 +180,40 @@ export default async function handler(req, res) {
 
     // Update TT address if it's an existing TT and address is provided
     if (finalTTId && address) {
+      // Fetch existing TT to see if address changed or if it lacks coordinates
+      const { data: existingTT } = await supabase
+        .from("tt")
+        .select("city, street, house, lat, lng")
+        .eq("id", finalTTId)
+        .single();
+
+      const addressChanged = 
+        existingTT?.city !== address.city || 
+        existingTT?.street !== address.street || 
+        existingTT?.house !== address.house;
+
+      const needsGeo = addressChanged || !existingTT?.lat;
+
+      if (needsGeo) {
+        finalGeo = await geocodeAddress(address.city, address.street, address.house);
+      } else {
+        finalGeo = { lat: existingTT.lat, lng: existingTT.lng };
+      }
+      
+      const updateData = {
+        city: address.city || null,
+        street: address.street || null,
+        house: address.house || null,
+      };
+
+      if (finalGeo) {
+        updateData.lat = finalGeo.lat;
+        updateData.lng = finalGeo.lng;
+      }
+
       await supabase
         .from("tt")
-        .update({
-          city: address.city || null,
-          street: address.street || null,
-          house: address.house || null,
-        })
+        .update(updateData)
         .eq("id", finalTTId);
     }
 
@@ -190,9 +245,9 @@ export default async function handler(req, res) {
       visited_at: isoVisitDate,
       tt_type_id: ttTypeId,
       distributor_id: asUuidOrNull(commercial?.distributorId),
-      visit_lat: address?.geo?.lat ?? null,
-      visit_lng: address?.geo?.lng ?? null,
-      visit_geo_address: address?.geo?.resolvedAddress ?? address?.address_text ?? null,
+      visit_lat: finalGeo?.lat ?? null,
+      visit_lng: finalGeo?.lng ?? null,
+      visit_geo_address: address?.address_text ?? null,
       price_type_id: asUuidOrNull(commercial?.priceCategoryId),
       price_seg_low: pricing?.econom ?? null,
       price_seg_mid: pricing?.middle ?? null,
