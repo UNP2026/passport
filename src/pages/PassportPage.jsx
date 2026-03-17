@@ -2189,7 +2189,7 @@ empty
         {/* Save */}
         {/* Save Button */}
         {!isViewOnly && (
-          <div className="flex gap-3 pb-8">
+          <div className="flex gap-3 pb-[calc(2rem+env(safe-area-inset-bottom))]">
             <Button
               variant="outline"
               className="w-16 h-12 shrink-0 rounded-2xl border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500 hover:text-white transition-all duration-300"
@@ -2220,7 +2220,7 @@ empty
         )}
 
         {isViewOnly && (
-          <div className="pb-8">
+          <div className="pb-[calc(2rem+env(safe-area-inset-bottom))]">
             <Button
               variant="outline"
               className="w-full h-12 rounded-2xl border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500 hover:text-white transition-all duration-300"

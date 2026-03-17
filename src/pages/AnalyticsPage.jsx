@@ -161,7 +161,7 @@ export function AnalyticsPage() {
   );
 
   return (
-    <div className="flex-1 bg-[#0b1220] text-white p-4 pb-20 md:p-8">
+    <div className="flex-1 bg-[#0b1220] text-white p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-8">
       {/* Portal filters to Sidebar if available */}
       {filterContainer && createPortal(
         isCollapsed ? collapsedFiltersContent : filtersContent,

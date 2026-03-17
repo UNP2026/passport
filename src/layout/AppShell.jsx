@@ -21,7 +21,7 @@ export function AppShell() {
   if (isDesktopOnly && !isMobile) {
     return (
       <SidebarProvider>
-        <div className="h-screen bg-background text-foreground overflow-hidden">
+        <div className="h-[100dvh] bg-background text-foreground overflow-hidden">
           <DesktopLayout>
             <Outlet />
           </DesktopLayout>
@@ -32,7 +32,7 @@ export function AppShell() {
 
   return (
     <SidebarProvider>
-      <div className="h-screen bg-background text-foreground overflow-hidden">
+      <div className="h-[100dvh] bg-background text-foreground overflow-hidden">
         <MobileLayout hideNav={hideNav}>
           <Outlet />
         </MobileLayout>

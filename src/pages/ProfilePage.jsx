@@ -18,7 +18,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="min-h-full p-4 pb-20 flex flex-col items-center glow">
+    <div className="min-h-full p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] flex flex-col items-center glow">
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

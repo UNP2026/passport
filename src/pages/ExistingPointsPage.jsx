@@ -214,7 +214,7 @@ export function ExistingPointsPage() {
   }
 
   return (
-    <div className="glow min-h-full pb-20">
+    <div className="glow min-h-full pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {/* Header */}
       <div className="sticky top-0 z-50 glass border-b border-white/10 px-4 py-4 flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="rounded-full">
