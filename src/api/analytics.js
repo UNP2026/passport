@@ -8,6 +8,7 @@ export async function fetchRealAnalyticsData() {
       id,
       visited_at,
       tt:tt_id (
+        id,
         name,
         city
       ),
@@ -63,7 +64,8 @@ export async function fetchRealAnalyticsData() {
       date: v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : "—",
       city: v.tt?.city || "Невідомо",
       agent: v.author?.full_name || "Невідомий",
-      point: v.tt?.name || "Невідома ТТ",
+      point: v.tt?.id || "Невідома ТТ",
+      point_name: v.tt?.name || "Невідома ТТ",
       brandPresence,
       hasHighfoam
     };
