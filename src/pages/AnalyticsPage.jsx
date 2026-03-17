@@ -72,7 +72,7 @@ export function AnalyticsPage() {
     if (!data) return [];
     const totalVisits = filteredData.length;
     const uniqueCities = new Set(filteredData.map(d => d.city)).size;
-    const uniqueTTs = new Set(filteredData.map(d => d.point)).size;
+    const uniqueTTs = new Set(filteredData.map(d => d.pointId)).size;
     
     const presentBrands = new Set();
     filteredData.forEach(d => {
