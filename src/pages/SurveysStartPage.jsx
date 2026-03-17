@@ -8,7 +8,7 @@ export function SurveysStartPage() {
   const MotionButton = motion.button;
 
   return (
-    <div className="p-6 space-y-8 glow min-h-screen">
+    <div className="p-6 pb-24 space-y-8 glow min-h-full">
       <MotionDiv 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}

@@ -1263,7 +1263,7 @@ empty
 
   // ===== UI =====
   return (
-    <div className="min-h-screen px-4 py-4 flex justify-center glow">
+    <div className="min-h-full px-4 py-4 flex justify-center glow">
       <div className="w-full max-w-[640px] space-y-4">
         {/* Title + progress */}
         <MotionDiv 

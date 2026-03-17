@@ -214,16 +214,16 @@ export function ExistingPointsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="glow min-h-full pb-20">
       {/* Header */}
-      <div className="sticky top-0 z-10 glass border-b border-white/10 px-4 py-4 flex items-center gap-4">
+      <div className="sticky top-0 z-50 glass border-b border-white/10 px-4 py-4 flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="rounded-full">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-xl font-bold text-white flex-1">Наявні точки</h1>
       </div>
 
-      <div className="p-4 space-y-6 max-w-2xl mx-auto">
+      <div className="p-4 space-y-6 max-w-2xl mx-auto relative z-10">
         {/* Search & Toggle */}
         <div className="space-y-4">
           <div className="relative">
@@ -292,17 +292,18 @@ export function ExistingPointsPage() {
         </div>
 
         {/* Content */}
-        <div className="space-y-4">
-          {viewMode === "orgs" || viewMode === "cities" ? (
-            <AnimatePresence mode="popLayout">
-              {filteredData.map((group) => (
-                <motion.div
-                  key={group.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="space-y-2"
-                >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={viewMode}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {viewMode === "orgs" || viewMode === "cities" ? (
+              filteredData.map((group) => (
+                <div key={group.id} className="space-y-2">
                   <button
                     onClick={() => toggleOrg(group.id)}
                     className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/10 hover:bg-white/5 transition-colors"
@@ -333,26 +334,26 @@ export function ExistingPointsPage() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          ) : (
-            <div className="space-y-3">
-              {filteredData.map((item) => (
-                <TTCard key={item.tt.id} item={item} isEditable={isEditable} nav={nav} />
-              ))}
-            </div>
-          )}
-
-          {filteredData.length === 0 && (
-            <div className="text-center py-12 space-y-4">
-              <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-                <History className="h-8 w-8 text-muted-foreground" />
+                </div>
+              ))
+            ) : (
+              <div className="space-y-3">
+                {filteredData.map((item) => (
+                  <TTCard key={item.tt.id} item={item} isEditable={isEditable} nav={nav} />
+                ))}
               </div>
-              <div className="text-muted-foreground">Нічого не знайдено</div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {filteredData.length === 0 && (
+              <div className="text-center py-12 space-y-4">
+                <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center mx-auto">
+                  <History className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div className="text-muted-foreground">Нічого не знайдено</div>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

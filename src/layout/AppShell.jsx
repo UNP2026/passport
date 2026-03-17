@@ -21,7 +21,7 @@ export function AppShell() {
   if (isDesktopOnly && !isMobile) {
     return (
       <SidebarProvider>
-        <div style={styles.bg}>
+        <div className="h-screen bg-background text-foreground overflow-hidden">
           <DesktopLayout>
             <Outlet />
           </DesktopLayout>
@@ -32,7 +32,7 @@ export function AppShell() {
 
   return (
     <SidebarProvider>
-      <div style={styles.bg}>
+      <div className="h-screen bg-background text-foreground overflow-hidden">
         <MobileLayout hideNav={hideNav}>
           <Outlet />
         </MobileLayout>
@@ -40,12 +40,3 @@ export function AppShell() {
     </SidebarProvider>
   );
 }
-
-const styles = {
-  bg: {
-    height: "100vh",
-    background: "#0b1220",
-    color: "#e5e7eb",
-    overflow: "hidden",
-  },
-};

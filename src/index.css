@@ -41,7 +41,7 @@
     @apply border-slate-800;
   }
   html, body {
-    @apply bg-slate-950 text-slate-100 overflow-x-hidden;
+    @apply bg-slate-950 text-slate-100 overflow-hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
@@ -61,7 +61,6 @@
   .glow {
     position: relative;
     isolation: isolate;
-    overflow-x: hidden;
   }
 
   .glow::before {
