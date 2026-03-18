@@ -54,6 +54,7 @@ import {
   Pencil,
   Calendar,
   User,
+  ImageIcon,
 } from "lucide-react"
 
 // Заглушки — позже подтянем из БД
@@ -550,12 +551,14 @@ const [contactsDraft, setContactsDraft] = useState({ ...contacts })
     finalText: "",
   })
 
-  const photoInputRef = useRef(null)
+  const photoInputCameraRef = useRef(null)
+  const photoInputGalleryRef = useRef(null)
 
   const [ui, setUI] = useState({
     confirmBackOpen: false,
     confirmGeoOpen: false,
     savedOpen: false,
+    photoMenuOpen: false,
     photoPreview: null, // url
     geoLoading: false,
     isRecording: false,
@@ -1039,10 +1042,33 @@ empty
     // если вдруг прилетит не картинка
     if (!file || !file.type?.startsWith("image/")) return file;
 
-    // читаем как bitmap (быстрее и без FileReader)
-    const bitmap = await createImageBitmap(file);
+    let imageSource;
+    try {
+      // читаем как bitmap (быстрее и без FileReader)
+      imageSource = await createImageBitmap(file);
+    } catch (err) {
+      console.warn("createImageBitmap failed, falling back to HTMLImageElement", err);
+      try {
+        imageSource = await new Promise((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(img);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Failed to load image via HTMLImageElement"));
+          };
+          img.src = url;
+        });
+      } catch (fallbackErr) {
+        console.error("Fallback image loading failed", fallbackErr);
+        return file; // Возвращаем оригинальный файл, если сжать не удалось
+      }
+    }
 
-    let { width, height } = bitmap;
+    let { width, height } = imageSource;
 
     // если уже маленькое — всё равно можно чуть сжать, но без ресайза
     let targetW = width;
@@ -1062,10 +1088,12 @@ empty
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
 
-    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+    ctx.drawImage(imageSource, 0, 0, targetW, targetH);
 
-    // bitmap можно освободить (не обязательно, но полезно)
-    bitmap.close?.();
+    // освобождаем память, если это ImageBitmap
+    if (imageSource.close) {
+      imageSource.close();
+    }
 
     const blob = await new Promise((resolve) => {
       canvas.toBlob(
@@ -1865,25 +1893,34 @@ empty
                 <div className="relative">
                   <button 
                     type="button"
-                    onClick={() => {
-                      console.log("Add photo clicked")
-                      photoInputRef.current?.click()
-                    }}
+                    onClick={() => setUI(s => ({ ...s, photoMenuOpen: true }))}
                     className="h-20 w-20 relative z-10 cursor-pointer rounded-2xl border border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05] flex flex-col items-center justify-center gap-1"
                   >
                     <Camera className="h-4 w-4 text-muted-foreground" />
                     <span className="text-[11px] text-muted-foreground">Додати</span>
                   </button>
                   <input
-                    ref={photoInputRef}
+                    ref={photoInputCameraRef}
                     id="photoInputCamera"
                     type="file"
                     accept="image/*"
-                    //capture="environment"
+                    capture="environment"
                     className="absolute -left-[9999px] w-px h-px opacity-0"
-                    onChange={() => {
-                      onPickPhotoFiles(photoInputRef.current.files)
-                      photoInputRef.current.value = ""
+                    onChange={(e) => {
+                      onPickPhotoFiles(e.target.files)
+                      e.target.value = ""
+                    }}
+                  />
+                  <input
+                    ref={photoInputGalleryRef}
+                    id="photoInputGallery"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="absolute -left-[9999px] w-px h-px opacity-0"
+                    onChange={(e) => {
+                      onPickPhotoFiles(e.target.files)
+                      e.target.value = ""
                     }}
                   />
                 </div>
@@ -2289,6 +2326,47 @@ empty
                 Зберегти без геолокації
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Photo Source Selection */}
+        <Dialog open={ui.photoMenuOpen} onOpenChange={(open) => setUI((s) => ({ ...s, photoMenuOpen: open }))}>
+          <DialogContent className="glass rounded-3xl border-white/10 sm:max-w-[425px]">
+            <button
+              onClick={() => setUI((s) => ({ ...s, photoMenuOpen: false }))}
+              className="absolute right-4 top-4 rounded-full p-2 opacity-70 transition-opacity hover:opacity-100 hover:bg-white/10"
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Закрити</span>
+            </button>
+            <DialogHeader>
+              <DialogTitle>Додати фото</DialogTitle>
+              <DialogDescription>Оберіть спосіб додавання фотографії</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 py-4">
+              <Button
+                variant="outline"
+                className="h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 justify-start px-6"
+                onClick={() => {
+                  setUI((s) => ({ ...s, photoMenuOpen: false }))
+                  setTimeout(() => photoInputCameraRef.current?.click(), 100)
+                }}
+              >
+                <Camera className="mr-3 h-5 w-5 text-blue-400" />
+                <span className="text-base">Зробити фото</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 justify-start px-6"
+                onClick={() => {
+                  setUI((s) => ({ ...s, photoMenuOpen: false }))
+                  setTimeout(() => photoInputGalleryRef.current?.click(), 100)
+                }}
+              >
+                <ImageIcon className="mr-3 h-5 w-5 text-emerald-400" />
+                <span className="text-base">Обрати з галереї</span>
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
