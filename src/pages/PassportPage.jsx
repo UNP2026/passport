@@ -1326,35 +1326,15 @@ empty
             </div>
             <div className="relative pt-2 pb-4">
               <div className="relative h-3 w-full rounded-full bg-white/10 overflow-hidden border border-white/5 shadow-inner">
-                <motion.div 
-                  className="h-full bg-gradient-to-r from-indigo-500 via-primary to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.6)]"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${readiness}%` }}
-                  transition={{ duration: 1, ease: "easeOut" }}
+                <div 
+                  className="h-full bg-gradient-to-r from-indigo-500 via-primary to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all duration-300 ease-out"
+                  style={{ width: `${readiness}%` }}
                 />
               </div>
               {readiness > 0 && (
-                <motion.div 
-                  className="absolute top-2 left-0 h-3 bg-primary/40 blur-md -z-10"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${readiness}%` }}
-                  transition={{ duration: 1, ease: "easeOut" }}
-                />
-              )}
-              {/* Animated light streak */}
-              {readiness > 0 && readiness < 100 && (
-                <motion.div
-                  className="absolute top-2 h-3 w-20 bg-white/20 blur-sm -z-5"
-                  animate={{ 
-                    left: ["0%", "100%"],
-                    opacity: [0, 1, 0]
-                  }}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: Infinity, 
-                    ease: "linear" 
-                  }}
-                  style={{ maxWidth: `${readiness}%` }}
+                <div 
+                  className="absolute top-2 left-0 h-3 bg-primary/40 blur-md -z-10 transition-all duration-300 ease-out"
+                  style={{ width: `${readiness}%` }}
                 />
               )}
             </div>
