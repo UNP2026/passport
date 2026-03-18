@@ -1879,7 +1879,7 @@ empty
                     id="photoInputCamera"
                     type="file"
                     accept="image/*"
-                    capture="environment"
+                    //capture="environment"
                     className="absolute -left-[9999px] w-px h-px opacity-0"
                     onChange={() => {
                       onPickPhotoFiles(photoInputRef.current.files)
