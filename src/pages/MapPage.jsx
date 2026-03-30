@@ -95,9 +95,9 @@ export function MapPage() {
       
       let presenceMatch = true;
       if (filters.presence === "highfoam") {
-        presenceMatch = tt.hasHighfoam === true;
+        presenceMatch = tt.isCooperating === true;
       } else if (filters.presence === "competitors") {
-        presenceMatch = tt.hasHighfoam === false;
+        presenceMatch = tt.isCooperating === false;
       }
 
       return searchMatch && orgMatch && pointMatch && typeMatch && managerMatch && priceMatch && brandMatch && presenceMatch;
@@ -309,10 +309,10 @@ export function MapPage() {
             const style = typeStyles[firstTt.typeName] || { color: "#94a3b8", shape: "circle" };
             const count = group.length;
             
-            // If any TT in the group is a competitor (hasHighfoam === false), we mark the group as competitor
+            // If any TT in the group is a competitor (isCooperating === false), we mark the group as competitor
             // Or maybe if ALL are competitors? Let's say if the first one is, or if all are.
-            // A point is a competitor if it doesn't have Highfoam.
-            const isCompetitor = group.every(tt => tt.hasHighfoam === false);
+            // A point is a competitor if it doesn't cooperate.
+            const isCompetitor = group.every(tt => tt.isCooperating === false);
 
             return (
               <Marker 

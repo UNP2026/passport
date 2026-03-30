@@ -51,9 +51,9 @@ export function AnalyticsPage() {
       
       let presenceMatch = true;
       if (filters.presence === "highfoam") {
-        presenceMatch = d.hasHighfoam === true;
+        presenceMatch = d.isCooperating === true;
       } else if (filters.presence === "competitors") {
-        presenceMatch = d.hasHighfoam === false;
+        presenceMatch = d.isCooperating === false;
       }
       
       let dateMatch = true;

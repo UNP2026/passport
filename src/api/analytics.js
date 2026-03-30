@@ -7,6 +7,7 @@ export async function fetchRealAnalyticsData() {
     .select(`
       id,
       visited_at,
+      is_cooperating,
       tt:tt_id (
         id,
         name,
@@ -45,17 +46,12 @@ export async function fetchRealAnalyticsData() {
   const brandCounts = {};
   const processedData = visits.map(v => {
     const brandPresence = {};
-    let hasHighfoam = false;
 
     brandNames.forEach(bn => {
       const isPresent = v.visit_brands.some(vb => vb.brand?.name === bn);
       brandPresence[bn] = isPresent;
       if (isPresent) {
         brandCounts[bn] = (brandCounts[bn] || 0) + 1;
-        const brandObj = allBrands?.find(b => b.name === bn);
-        if (brandObj && brandObj.is_highfoam) {
-          hasHighfoam = true;
-        }
       }
     });
 
@@ -67,7 +63,7 @@ export async function fetchRealAnalyticsData() {
       pointId: v.tt?.id || null,
       point: v.tt?.name || "Невідома ТТ",
       brandPresence,
-      hasHighfoam
+      isCooperating: v.is_cooperating === true
     };
   });
 

@@ -26,6 +26,7 @@ export async function fetchMapData() {
     .select(`
       tt_id,
       visited_at,
+      is_cooperating,
       author:user_profiles!visits_author_user_id_fkey ( full_name ),
       price_type_id,
       tt_type_id,
@@ -80,7 +81,7 @@ export async function fetchMapData() {
         lastVisitManager: null,
         lastVisitPrice: null,
         brands: [],
-        hasHighfoam: false
+        isCooperating: false
       });
     }
   });
@@ -95,10 +96,10 @@ export async function fetchMapData() {
         tt.lastVisitManager = v.author?.full_name || "Невідомий";
         tt.lastVisitPrice = priceMap.get(v.price_type_id) || "Не вказано";
         tt.typeName = typeMap.get(v.tt_type_id) || "Інше";
+        tt.isCooperating = v.is_cooperating === true;
         
         if (v.visit_brands && v.visit_brands.length > 0) {
           tt.brands = v.visit_brands.map(vb => vb.brand?.name).filter(Boolean);
-          tt.hasHighfoam = v.visit_brands.some(vb => vb.brand?.is_highfoam);
         }
       }
     }

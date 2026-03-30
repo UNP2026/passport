@@ -151,8 +151,8 @@ export function AnalyticsFilters({ filters, setFilters, cities, agents, brands, 
             onChange={(e) => setFilters({ ...filters, presence: e.target.value })}
           >
             <option value="all" className="bg-[#0b1220] text-white">Всі</option>
-            <option value="highfoam" className="bg-[#0b1220] text-white">Highfoam</option>
-            <option value="competitors" className="bg-[#0b1220] text-white">Конкуренти</option>
+            <option value="highfoam" className="bg-[#0b1220] text-white">Присутні</option>
+            <option value="competitors" className="bg-[#0b1220] text-white">Неприсутні</option>
           </select>
         </div>
 
