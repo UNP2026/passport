@@ -85,3 +85,74 @@ export async function fetchRealAnalyticsData() {
     points
   };
 }
+
+export async function exportFullRawVisits() {
+  const { data: visits, error } = await supabase
+    .from("visits")
+    .select(`
+      id,
+      visited_at,
+      is_cooperating,
+      tt_id,
+      tt (
+        name,
+        city,
+        street,
+        house,
+        lat,
+        lng,
+        is_active,
+        orgs (name, org_code)
+      ),
+      author:user_profiles!visits_author_user_id_fkey (
+        full_name
+      ),
+      tt_type:tt_types (name),
+      price_type:price (category),
+      price_seg_low,
+      price_seg_mid,
+      price_seg_high,
+      is_working,
+      sells_pillows,
+      contact_name,
+      contact_position,
+      contact_phone,
+      contact_email,
+      tt_description,
+      visit_result_note,
+      visit_brands (
+        brand:brand_id (
+          name,
+          is_highfoam
+        )
+      ),
+      visit_manufacturers (
+        manufacturer:manufacturer_id (
+          name
+        ),
+        pp,
+        kv
+      )
+    `)
+    .order("visited_at", { ascending: false });
+
+  if (error) {
+    console.error("exportFullRawVisits error:", error);
+    return [];
+  }
+
+  const { data: allBrands } = await supabase
+    .from("brands")
+    .select("name, is_highfoam, is_pm");
+
+  const { data: mfs } = await supabase
+    .from("manufacturers")
+    .select("name")
+    .order("sort_order", { ascending: true });
+    
+  return {
+    visits: visits || [],
+    brandsInfo: allBrands || [],
+    manufacturers: mfs ? mfs.map(m => m.name) : []
+  };
+}
