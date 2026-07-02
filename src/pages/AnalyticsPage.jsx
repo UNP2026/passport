@@ -93,7 +93,18 @@ export function AnalyticsPage() {
         dateMatch = dateMatch && d.date <= filters.dateTo;
       }
 
-      return cityMatch && agentMatch && brandMatch && pointMatch && presenceMatch && dateMatch;
+      let modelTypeMatch = true;
+      if (filters.modelType && filters.modelType !== "all") {
+        const allowedBrands = data.allBrands.filter(b => {
+          if (filters.modelType === "highfoam") return b.is_highfoam === true;
+          if (filters.modelType === "privat") return b.is_pm === true;
+          return true;
+        }).map(b => b.name);
+        
+        modelTypeMatch = allowedBrands.some(bn => d.brandPresence[bn] === true);
+      }
+
+      return cityMatch && agentMatch && brandMatch && pointMatch && presenceMatch && dateMatch && modelTypeMatch;
     });
   }, [data, filters]);
 

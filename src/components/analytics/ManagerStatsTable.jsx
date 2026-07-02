@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 
-export function ManagerStatsTable({ data, agents, activeStat }) {
+export function ManagerStatsTable({ data, agents, activeStat, brands = [] }) {
   const managerStats = useMemo(() => {
     return agents.map(agent => {
       const agentData = data.filter(d => d.agent === agent);
@@ -16,7 +16,9 @@ export function ManagerStatsTable({ data, agents, activeStat }) {
       const presentBrands = new Set();
       agentData.forEach(visit => {
         Object.entries(visit.brandPresence).forEach(([brand, isPresent]) => {
-          if (isPresent) presentBrands.add(brand);
+          if (isPresent && (brands.length === 0 || brands.includes(brand))) {
+            presentBrands.add(brand);
+          }
         });
       });
       const brandCount = presentBrands.size;
@@ -30,7 +32,7 @@ export function ManagerStatsTable({ data, agents, activeStat }) {
         brands: brandCount
       };
     });
-  }, [data, agents]);
+  }, [data, agents, brands]);
 
   const sortedStats = useMemo(() => {
     const sortMap = {
