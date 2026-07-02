@@ -39,10 +39,10 @@ export function AnalyticsFilters({ filters, setFilters, cities, agents, brands, 
   };
 
   const resetFilters = () => {
-    setFilters({ city: "all", agent: "all", brand: "all", point: "all", presence: "all", datePreset: "all", dateFrom: "", dateTo: "" });
+    setFilters({ city: "all", agent: "all", brand: "all", point: "all", presence: "all", modelType: "all", datePreset: "all", dateFrom: "", dateTo: "" });
   };
 
-  const hasActiveFilters = filters.city !== "all" || filters.agent !== "all" || filters.brand !== "all" || filters.point !== "all" || filters.presence !== "all" || filters.datePreset !== "all" || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters = filters.city !== "all" || filters.agent !== "all" || filters.brand !== "all" || filters.point !== "all" || filters.presence !== "all" || filters.modelType !== "all" || filters.datePreset !== "all" || filters.dateFrom || filters.dateTo;
 
   return (
     <div className="space-y-6 pb-6 px-4">
@@ -143,7 +143,7 @@ export function AnalyticsFilters({ filters, setFilters, cities, agents, brands, 
           </select>
         </div>
 
-        <div>
+         <div>
           <label className="text-xs text-muted-foreground uppercase tracking-wider block mb-2">Присутність на ринку</label>
           <select 
             className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500 transition-colors [color-scheme:dark]"
@@ -153,6 +153,19 @@ export function AnalyticsFilters({ filters, setFilters, cities, agents, brands, 
             <option value="all" className="bg-[#0b1220] text-white">Всі</option>
             <option value="highfoam" className="bg-[#0b1220] text-white">Присутні</option>
             <option value="competitors" className="bg-[#0b1220] text-white">Неприсутні</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted-foreground uppercase tracking-wider block mb-2">Тип моделей</label>
+          <select 
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500 transition-colors [color-scheme:dark]"
+            value={filters.modelType || "all"}
+            onChange={(e) => setFilters({ ...filters, modelType: e.target.value, brand: "all" })}
+          >
+            <option value="all" className="bg-[#0b1220] text-white">Всі</option>
+            <option value="highfoam" className="bg-[#0b1220] text-white">Highfoam</option>
+            <option value="privat" className="bg-[#0b1220] text-white">Privat</option>
           </select>
         </div>
 

@@ -8,6 +8,7 @@ export async function fetchRealAnalyticsData() {
       id,
       visited_at,
       is_cooperating,
+      tt_id,
       tt:tt_id (
         id,
         name,
@@ -30,10 +31,25 @@ export async function fetchRealAnalyticsData() {
     return null;
   }
 
+  // Filter for latest visits per TT
+  const seenTtIds = new Set();
+  const latestVisits = [];
+  for (const v of (visits || [])) {
+    const ttId = v.tt_id || v.tt?.id;
+    if (ttId) {
+      if (!seenTtIds.has(ttId)) {
+        seenTtIds.add(ttId);
+        latestVisits.push(v);
+      }
+    } else {
+      latestVisits.push(v);
+    }
+  }
+
   // 2. Fetch all brands to know the full list
   const { data: allBrands, error: brandsError } = await supabase
     .from("brands")
-    .select("name, is_highfoam")
+    .select("name, is_highfoam, is_pm")
     .order("name", { ascending: true });
 
   if (brandsError) {
@@ -44,11 +60,11 @@ export async function fetchRealAnalyticsData() {
 
   // 3. Process visits into the format expected by the UI
   const brandCounts = {};
-  const processedData = visits.map(v => {
+  const processedData = latestVisits.map(v => {
     const brandPresence = {};
 
     brandNames.forEach(bn => {
-      const isPresent = v.visit_brands.some(vb => vb.brand?.name === bn);
+      const isPresent = v.visit_brands?.some(vb => vb.brand?.name === bn) || false;
       brandPresence[bn] = isPresent;
       if (isPresent) {
         brandCounts[bn] = (brandCounts[bn] || 0) + 1;
@@ -80,6 +96,7 @@ export async function fetchRealAnalyticsData() {
     raw: processedData,
     brands: sortedBrands,
     brandNames,
+    allBrands: allBrands || [],
     cities,
     agents,
     points

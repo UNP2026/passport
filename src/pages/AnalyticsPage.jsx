@@ -25,6 +25,7 @@ export function AnalyticsPage() {
     brand: "all",
     point: "all",
     presence: "all",
+    modelType: "all",
     datePreset: "all",
     dateFrom: "",
     dateTo: ""
@@ -43,6 +44,31 @@ export function AnalyticsPage() {
     }
     loadData();
   }, []);
+
+  const displayBrandNames = useMemo(() => {
+    if (!data) return [];
+    if (!filters.modelType || filters.modelType === "all") {
+      return data.brandNames;
+    }
+    return data.allBrands
+      .filter(b => {
+        if (filters.modelType === "highfoam") return b.is_highfoam === true;
+        if (filters.modelType === "privat") return b.is_pm === true;
+        return true;
+      })
+      .map(b => b.name);
+  }, [data, filters.modelType]);
+
+  const displayBrandsForFilter = useMemo(() => {
+    if (!data) return [];
+    return data.brands.filter(b => {
+      const detail = data.allBrands.find(ab => ab.name === b.name);
+      if (!detail) return true;
+      if (filters.modelType === "highfoam") return detail.is_highfoam === true;
+      if (filters.modelType === "privat") return detail.is_pm === true;
+      return true;
+    });
+  }, [data, filters.modelType]);
 
   const filteredData = useMemo(() => {
     if (!data) return [];
@@ -80,7 +106,7 @@ export function AnalyticsPage() {
     const presentBrands = new Set();
     filteredData.forEach(d => {
       Object.entries(d.brandPresence).forEach(([brand, isPresent]) => {
-        if (isPresent) presentBrands.add(brand);
+        if (isPresent && displayBrandNames.includes(brand)) presentBrands.add(brand);
       });
     });
     const brandsCount = presentBrands.size;
@@ -91,7 +117,7 @@ export function AnalyticsPage() {
       { id: 'tt', label: "Кількість ТТ", value: uniqueTTs, icon: Store, color: "text-amber-400" },
       { id: 'brands', label: "Кількість моделей", value: brandsCount, icon: Package, color: "text-cyan-400" },
     ];
-  }, [filteredData, data]);
+  }, [filteredData, data, displayBrandNames]);
 
   const handleStatClick = (statId) => {
     if (activeStat === statId) {
@@ -132,19 +158,9 @@ export function AnalyticsPage() {
       
       if (!visits || visits.length === 0) return;
 
-      // Filter for latest visits per TT
-      const seenTtIds = new Set();
-      const latestVisits = [];
-      for (const v of visits) {
-        if (v.tt_id) {
-          if (!seenTtIds.has(v.tt_id)) {
-            seenTtIds.add(v.tt_id);
-            latestVisits.push(v);
-          }
-        } else {
-          latestVisits.push(v);
-        }
-      }
+      // Filter for latest visits that match the active filters on screen
+      const filteredVisitIds = new Set(filteredData.map(d => d.id));
+      const latestVisits = visits.filter(v => filteredVisitIds.has(v.id));
 
       // calculate brand presence counts across latestVisits
       const brandCounts = {};
@@ -329,6 +345,83 @@ export function AnalyticsPage() {
           }
         });
       }
+
+      // Create second sheet: "Аналіз по моделях"
+      const modelWorksheet = workbook.addWorksheet("Аналіз по моделях", {
+        views: [{ showGridLines: false }]
+      });
+
+      // Sort brands: Highfoam first (by count desc), then Privat (by count desc), then others (by count desc)
+      const secondSheetBrands = [...(brandsInfo || [])].sort((a, b) => {
+        if (a.is_highfoam && !b.is_highfoam) return -1;
+        if (!a.is_highfoam && b.is_highfoam) return 1;
+        
+        if (a.is_highfoam && b.is_highfoam) { 
+           return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
+        }
+
+        if (a.is_pm && !b.is_pm) return -1;
+        if (!a.is_pm && b.is_pm) return 1;
+
+        return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
+      });
+
+      const secondSheetData = secondSheetBrands.map(b => ({
+        "Модель": b.name,
+        "Кількість точок": brandCounts[b.name] || 0
+      }));
+
+      if (secondSheetData.length > 0) {
+        const modelColumns = [
+          { header: "Модель", key: "Модель", width: 35 },
+          { header: "Кількість точок", key: "Кількість точок", width: 20 }
+        ];
+        modelWorksheet.columns = modelColumns;
+        modelWorksheet.addRows(secondSheetData);
+
+        // Style header row of second sheet
+        const mHeaderRow = modelWorksheet.getRow(1);
+        mHeaderRow.height = 30;
+        mHeaderRow.eachCell((cell) => {
+          cell.font = { bold: true };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFDCE6F1' }
+          };
+          cell.alignment = {
+            horizontal: 'center',
+            vertical: 'middle',
+            wrapText: true
+          };
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+
+        // Add auto-filter to second sheet
+        modelWorksheet.autoFilter = {
+          from: { row: 1, column: 1 },
+          to: { row: 1, column: modelColumns.length }
+        };
+
+        // Add borders to all data cells in second sheet
+        modelWorksheet.eachRow((row, rowNumber) => {
+          if (rowNumber > 1) { // Skip header
+            row.eachCell({ includeEmpty: true }, (cell) => {
+              cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+              };
+            });
+          }
+        });
+      }
       
       const buffer = await workbook.xlsx.writeBuffer();
       const dateStr = new Date().toISOString().split('T')[0];
@@ -361,7 +454,7 @@ export function AnalyticsPage() {
       setFilters={setFilters} 
       cities={data.cities}
       agents={data.agents}
-      brands={data.brands}
+      brands={displayBrandsForFilter}
       points={data.points}
     />
   );
@@ -454,12 +547,12 @@ export function AnalyticsPage() {
 
       {/* Detailed Manager Stats (Collapsible) */}
       {activeStat && (
-        <div className="mb-8">
+         <div className="mb-8">
           <ManagerStatsTable 
             data={filteredData} 
             agents={data.agents} 
             activeStat={activeStat}
-            brands={data.brandNames}
+            brands={displayBrandNames}
           />
         </div>
       )}
@@ -480,7 +573,7 @@ export function AnalyticsPage() {
                 <div className="xl:col-span-2">
                   <BrandHeatmap 
                     data={filteredData} 
-                    brands={data.brandNames} 
+                    brands={displayBrandNames} 
                     cities={data.cities} 
                     agents={data.agents}
                   />
@@ -488,7 +581,7 @@ export function AnalyticsPage() {
                 <div>
                   <BrandSummary 
                     data={filteredData} 
-                    brands={data.brandNames} 
+                    brands={displayBrandNames} 
                   />
                 </div>
               </div>
@@ -496,7 +589,7 @@ export function AnalyticsPage() {
           ) : (
             <PointsDetailTable 
               data={filteredData} 
-              brands={data.brandNames} 
+              brands={displayBrandNames} 
             />
           )}
         </div>

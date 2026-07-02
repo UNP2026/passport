@@ -6,8 +6,11 @@ export function BrandSummary({ data, brands }) {
     return brands.map(brand => {
       const presentCount = data.filter(d => d.brandPresence[brand]).length;
       const percentage = data.length ? Math.round((presentCount / data.length) * 100) : 0;
-      return { name: brand, percentage };
-    }).sort((a, b) => b.percentage - a.percentage);
+      return { name: brand, percentage, count: presentCount };
+    }).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.percentage - a.percentage;
+    });
   }, [data, brands]);
 
   const topBrand = summary[0];
@@ -23,7 +26,7 @@ export function BrandSummary({ data, brands }) {
             <div className="text-xl font-bold">{topBrand?.name}</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-emerald-400">{topBrand?.percentage}%</div>
+            <div className="text-2xl font-bold text-emerald-400">{topBrand?.percentage}% / {topBrand?.count} шт.</div>
             <div className="flex items-center gap-1 text-[10px] text-emerald-400/70 justify-end">
               <TrendingUp className="h-3 w-3" />
               +2.4%
@@ -37,7 +40,7 @@ export function BrandSummary({ data, brands }) {
             <div className="text-xl font-bold">{bottomBrand?.name}</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-rose-400">{bottomBrand?.percentage}%</div>
+            <div className="text-2xl font-bold text-rose-400">{bottomBrand?.percentage}% / {bottomBrand?.count} шт.</div>
             <div className="flex items-center gap-1 text-[10px] text-rose-400/70 justify-end">
               <TrendingDown className="h-3 w-3" />
               -1.1%
@@ -52,7 +55,7 @@ export function BrandSummary({ data, brands }) {
               <div key={b.name} className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span>{b.name}</span>
-                  <span className="font-bold">{b.percentage}%</span>
+                  <span className="font-bold">{b.percentage}% / {b.count} шт.</span>
                 </div>
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                   <div 
