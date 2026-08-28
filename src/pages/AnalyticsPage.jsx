@@ -210,15 +210,17 @@ export function AnalyticsPage() {
         const totalPP = v.visit_manufacturers?.reduce((acc, vm) => acc + (vm.pp || 0), 0) || 0;
         const highfoamPP = v.visit_manufacturers?.find(vm => vm.manufacturer?.name === "Highfoam")?.pp || 0;
         
-        let letter = "D";
+        let letter = "";
         if (totalPP > 29) letter = "A";
         else if (totalPP >= 20) letter = "B";
         else if (totalPP >= 10) letter = "C";
+        else if (totalPP > 0) letter = "D";
         
         const sharePercent = totalPP > 0 ? (highfoamPP / totalPP) * 100 : 0;
-        let number = "3";
+        let number = "";
         if (sharePercent > 49) number = "1";
         else if (sharePercent >= 20) number = "2";
+        else if (sharePercent > 0) number = "3";
         
         const category = `${letter}${number}`;
         const totalBrands = v.visit_brands?.filter(vb => vb.brand).length || 0;
