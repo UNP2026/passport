@@ -221,7 +221,8 @@ export function AnalyticsPage() {
         if (sharePercent > 49) number = "1";
         else if (sharePercent >= 20) number = "2";
         else if (sharePercent > 0) number = "3";
-        
+
+           
         const category = `${letter}${number}`;
         const totalBrands = v.visit_brands?.filter(vb => vb.brand).length || 0;
 
