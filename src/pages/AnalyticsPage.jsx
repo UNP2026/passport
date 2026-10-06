@@ -173,6 +173,44 @@ export function AnalyticsPage() {
       const filteredVisitIds = new Set(filteredData.map(d => d.id));
       const latestVisits = visits.filter(v => filteredVisitIds.has(v.id));
 
+      // Filter for all visits that match active filters on screen (without 1-per-TT constraint)
+      const allFilteredVisits = visits.filter(v => {
+        const [cityName] = (v.tt?.city || "").split(',').map(s => s.trim());
+        const cityMatch = filters.city === "all" || cityName === filters.city || v.tt?.city === filters.city;
+        const agentMatch = filters.agent === "all" || (v.author?.full_name || "Невідомий") === filters.agent;
+        const brandMatch = filters.brand === "all" || v.visit_brands?.some(vb => vb.brand?.name === filters.brand);
+        const pointMatch = filters.point === "all" || (v.tt?.name || "Невідома ТТ") === filters.point;
+        
+        let presenceMatch = true;
+        if (filters.presence === "highfoam") {
+          presenceMatch = v.is_cooperating === true;
+        } else if (filters.presence === "competitors") {
+          presenceMatch = v.is_cooperating === false;
+        }
+
+        const vDate = v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : "";
+        let dateMatch = true;
+        if (filters.dateFrom) {
+          dateMatch = dateMatch && vDate >= filters.dateFrom;
+        }
+        if (filters.dateTo) {
+          dateMatch = dateMatch && vDate <= filters.dateTo;
+        }
+
+        let modelTypeMatch = true;
+        if (filters.modelType && filters.modelType !== "all") {
+          const allowedBrands = (brandsInfo || []).filter(b => {
+            if (filters.modelType === "highfoam") return b.is_highfoam === true;
+            if (filters.modelType === "privat") return b.is_pm === true;
+            return true;
+          }).map(b => b.name);
+          
+          modelTypeMatch = allowedBrands.some(bn => v.visit_brands?.some(vb => vb.brand?.name === bn));
+        }
+
+        return cityMatch && agentMatch && brandMatch && pointMatch && presenceMatch && dateMatch && modelTypeMatch;
+      });
+
       // calculate brand presence counts across latestVisits
       const brandCounts = {};
       brandsInfo?.forEach(b => brandCounts[b.name] = 0);
@@ -200,242 +238,188 @@ export function AnalyticsPage() {
         return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
       }).map(b => b.name);
 
-      const exportData = latestVisits.flatMap(v => {
-        const [cityName, ...oblastParts] = (v.tt?.city || "").split(',').map(s => s.trim());
-        const city = cityName || "Невідомо";
-        const oblast = oblastParts.join(', ') || "";
-        const address = `${v.tt?.street || ''} ${v.tt?.house || ''}`.trim();
+      const brandNameSet = new Set(sortedBrandNames);
 
-        // Calculate category using PP (Потенціальні продажі)
-        const totalPP = v.visit_manufacturers?.reduce((acc, vm) => acc + (vm.pp || 0), 0) || 0;
-        const highfoamPP = v.visit_manufacturers?.find(vm => vm.manufacturer?.name === "Highfoam")?.pp || 0;
-        
-        let letter = "";
-        if (totalPP > 29) letter = "A";
-        else if (totalPP >= 20) letter = "B";
-        else if (totalPP >= 10) letter = "C";
-        else if (totalPP > 0) letter = "D";
-        
-        const sharePercent = totalPP > 0 ? (highfoamPP / totalPP) * 100 : 0;
-        let number = "";
-        if (sharePercent > 49) number = "1";
-        else if (sharePercent >= 20) number = "2";
-        else if (sharePercent > 0) number = "3";
-
-           
-        const category = `${letter}${number}`;
-        const totalBrands = v.visit_brands?.filter(vb => vb.brand).length || 0;
-
-        let mfs = v.visit_manufacturers || [];
-        if (mfs.length === 0) mfs = [null]; // ensure at least one row
-
-        const hasHighfoamMfg = mfs.some(m => m?.manufacturer?.name === "Highfoam");
-
-        const daysPassed = v.visited_at ? Math.floor((new Date() - new Date(v.visited_at)) / (1000 * 60 * 60 * 24)) : "";
-
-        return mfs.map((vm, index) => {
-          const mName = vm?.manufacturer?.name || "";
-
-          let nashaPrysutnist = "";
-          if (v.is_cooperating) {
-              if (mName === "Highfoam") {
-                  nashaPrysutnist = "Так";
-              } else if (!hasHighfoamMfg && index === 0) {
-                  nashaPrysutnist = "Так";
-              }
-          } else {
-              if (index === 0) nashaPrysutnist = "Ні";
-          }
-
-          const row = {
-            "ID Візиту": v.id,
-            "Дата та час": v.visited_at ? new Date(v.visited_at).toLocaleString('uk-UA') : "—",
-            "Днів після візиту": daysPassed,
-            "Менеджер": v.author?.full_name || "Невідомий",
-            "Категорія точки": category,
-            "Код Організації": v.tt?.orgs?.org_code || "",
-            "Організація": v.tt?.orgs?.name || "Невідома",
-            "Торгова точка": v.tt?.name || "Невідома ТТ",
-            "Місто": city,
-            "Область": oblast,
-            "Адреса": address,
-            "Наша присутність": nashaPrysutnist,
-            "Тип точки": v.tt_type?.name || "",
-            "Тип прайсу": v.price_type?.category || "",
-            
-            "Виробник": mName,
-            "Загальний потенціал точки": totalPP,
-            "Наша доля, %": Number(sharePercent.toFixed(0)),
-            "Потенційні продажі": vm?.pp ?? "",
-            "Кількість місць": vm?.kv ?? "",
-
-            "Ціновий сегмент (Низький) %": v.price_seg_low ?? "",
-            "Ціновий сегмент (Середній) %": v.price_seg_mid ?? "",
-            "Ціновий сегмент (Високий) %": v.price_seg_high ?? "",
-            "Зараз працює": v.is_working ? "Так" : "Ні",
-            "Продає подушки": v.sells_pillows ? "Так" : "Ні",
-            "Контактна особа": v.contact_name || "",
-            "Посада": v.contact_position || "",
-            "Телефон": v.contact_phone || "",
-            "Опис точки": v.tt_description || "",
-            "Результат візиту": v.visit_result_note || "",
-            "Сума наявності на вітрині": totalBrands,
-          };
-
-          sortedBrandNames.forEach(b => {
-             const isPresent = v.visit_brands?.some(vb => vb.brand?.name === b);
-             row[`TM ${b}`] = isPresent ? 1 : "";
-          });
-
-          return row;
-        });
-      });
-
-      let rowNum = 1;
-      const finalExportData = exportData.map(r => ({ "№": rowNum++, ...r }));
+      const formatOnlyDate = (d) => {
+        if (!d) return "—";
+        try {
+          const dt = new Date(d);
+          if (isNaN(dt.getTime())) return d;
+          return dt.toLocaleDateString('uk-UA');
+        } catch {
+          return d;
+        }
+      };
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Візити", {
-        views: [{ showGridLines: false }]
-      });
 
-      if (finalExportData.length > 0) {
-        const columns = Object.keys(finalExportData[0]).map(key => {
-          let width = 18;
-          if (key === "№") width = 5;
-          if (key.startsWith('TM ')) width = 7;
-          return { header: key, key: key, width: width };
-        });
-        worksheet.columns = columns;
-
-        worksheet.addRows(finalExportData);
-
-        // Styling the header row
-        const headerRow = worksheet.getRow(1);
-        headerRow.height = 80;
-        
-        headerRow.eachCell((cell, colNumber) => {
-          const colKey = columns[colNumber - 1].key;
-          
-          cell.font = { bold: true };
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFDCE6F1' }
-          };
-          
-          cell.alignment = {
-             horizontal: 'center',
-             vertical: 'middle',
-             wrapText: true,
-             ...(colKey.startsWith('TM ') ? { textRotation: 90 } : {})
-          };
-          
-          cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          };
+      const addVisitsWorksheet = (sheetTitle, visitItems) => {
+        const worksheet = workbook.addWorksheet(sheetTitle, {
+          views: [{ showGridLines: false }]
         });
 
-        // Add auto-filter
-        worksheet.autoFilter = {
-          from: { row: 1, column: 1 },
-          to: { row: 1, column: columns.length }
-        };
+        const exportData = visitItems.flatMap(v => {
+          const [cityName, ...oblastParts] = (v.tt?.city || "").split(',').map(s => s.trim());
+          const city = cityName || "Невідомо";
+          const oblast = oblastParts.join(', ') || "";
+          const address = `${v.tt?.street || ''} ${v.tt?.house || ''}`.trim();
 
-        // Add borders to all data cells
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1) { // Skip header
-            row.eachCell({ includeEmpty: true }, (cell) => {
-              cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-              };
+          // Calculate category using PP (Потенціальні продажі)
+          const totalPP = v.visit_manufacturers?.reduce((acc, vm) => acc + (vm.pp || 0), 0) || 0;
+          const highfoamPP = v.visit_manufacturers?.find(vm => vm.manufacturer?.name === "Highfoam")?.pp || 0;
+          
+          let letter = "";
+          if (totalPP > 29) letter = "A";
+          else if (totalPP >= 20) letter = "B";
+          else if (totalPP >= 10) letter = "C";
+          else if (totalPP > 0) letter = "D";
+          
+          const sharePercent = totalPP > 0 ? (highfoamPP / totalPP) * 100 : 0;
+          let number = "";
+          if (sharePercent > 49) number = "1";
+          else if (sharePercent >= 20) number = "2";
+          else if (sharePercent > 0) number = "3";
+
+          const category = `${letter}${number}`;
+          const totalBrands = v.visit_brands?.filter(vb => vb.brand).length || 0;
+
+          let mfs = v.visit_manufacturers || [];
+          if (mfs.length === 0) mfs = [null]; // ensure at least one row
+
+          const hasHighfoamMfg = mfs.some(m => m?.manufacturer?.name === "Highfoam");
+
+          const daysPassed = v.visited_at ? Math.floor((new Date() - new Date(v.visited_at)) / (1000 * 60 * 60 * 24)) : "";
+
+          return mfs.map((vm, index) => {
+            const mName = vm?.manufacturer?.name || "";
+
+            let nashaPrysutnist = "";
+            if (v.is_cooperating) {
+                if (mName === "Highfoam") {
+                    nashaPrysutnist = "Так";
+                } else if (!hasHighfoamMfg && index === 0) {
+                    nashaPrysutnist = "Так";
+                }
+            } else {
+                if (index === 0) nashaPrysutnist = "Ні";
+            }
+
+            const row = {
+              "ID Візиту": v.id,
+              "Дата": formatOnlyDate(v.visited_at),
+              "Днів після візиту": daysPassed,
+              "Менеджер": v.author?.full_name || "Невідомий",
+              "Категорія точки": category,
+              "Організація": v.tt?.orgs?.name || "Невідома",
+              "Код Організації": v.tt?.orgs?.org_code || "",
+              "Торгова точка": v.tt?.name || "Невідома ТТ",
+              "Місто": city,
+              "Область": oblast,
+              "Адреса": address,
+              "Наша присутність": nashaPrysutnist,
+              "Тип точки": v.tt_type?.name || "",
+              "Тип прайсу": v.price_type?.category || "",
+              
+              "Виробник": mName,
+              "Загальний потенціал точки": totalPP,
+              "Наша доля, %": Number(sharePercent.toFixed(0)),
+              "Потенційні продажі": vm?.pp ?? "",
+              "Фактичні продажі по організації": "",
+              "Фактичні продажі по менеджеру": "",
+              "Кількість місць": vm?.kv ?? "",
+
+              "Ціновий сегмент (Низький) %": v.price_seg_low ?? "",
+              "Ціновий сегмент (Середній) %": v.price_seg_mid ?? "",
+              "Ціновий сегмент (Високий) %": v.price_seg_high ?? "",
+              "Зараз працює": v.is_working ? "Так" : "Ні",
+              "Продає подушки": v.sells_pillows ? "Так" : "Ні",
+              "Контактна особа": v.contact_name || "",
+              "Посада": v.contact_position || "",
+              "Телефон": v.contact_phone || "",
+              "Опис точки": v.tt_description || "",
+              "Результат візиту": v.visit_result_note || "",
+              "Сума наявності на вітрині": totalBrands,
+            };
+
+            sortedBrandNames.forEach(b => {
+               const isPresent = v.visit_brands?.some(vb => vb.brand?.name === b);
+               row[b] = isPresent ? 1 : "";
             });
-          }
+
+            return row;
+          });
         });
-      }
 
-      // Create second sheet: "Аналіз по моделях"
-      const modelWorksheet = workbook.addWorksheet("Аналіз по моделях", {
-        views: [{ showGridLines: false }]
-      });
+        let rowNum = 1;
+        const finalExportData = exportData.map(r => ({ "№": rowNum++, ...r }));
 
-      // Sort brands: Highfoam first (by count desc), then Privat (by count desc), then others (by count desc)
-      const secondSheetBrands = [...(brandsInfo || [])].sort((a, b) => {
-        if (a.is_highfoam && !b.is_highfoam) return -1;
-        if (!a.is_highfoam && b.is_highfoam) return 1;
-        
-        if (a.is_highfoam && b.is_highfoam) { 
-           return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
+        if (finalExportData.length > 0) {
+          const columns = Object.keys(finalExportData[0]).map(key => {
+            let width = 18;
+            if (key === "№") width = 5;
+            if (brandNameSet.has(key)) width = 7;
+            return { header: key, key: key, width: width };
+          });
+          worksheet.columns = columns;
+
+          worksheet.addRows(finalExportData);
+
+          // Styling the header row
+          const headerRow = worksheet.getRow(1);
+          headerRow.height = 80;
+          
+          headerRow.eachCell((cell, colNumber) => {
+            const colKey = columns[colNumber - 1].key;
+            
+            cell.font = { bold: true };
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFDCE6F1' }
+            };
+            
+            cell.alignment = {
+               horizontal: 'center',
+               vertical: 'middle',
+               wrapText: true,
+               ...(brandNameSet.has(colKey) ? { textRotation: 90 } : {})
+            };
+            
+            cell.border = {
+              top: { style: 'thin' },
+              left: { style: 'thin' },
+              bottom: { style: 'thin' },
+              right: { style: 'thin' }
+            };
+          });
+
+          // Add auto-filter
+          worksheet.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: 1, column: columns.length }
+          };
+
+          // Add borders to all data cells
+          worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber > 1) { // Skip header
+              row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.border = {
+                  top: { style: 'thin' },
+                  left: { style: 'thin' },
+                  bottom: { style: 'thin' },
+                  right: { style: 'thin' }
+                };
+              });
+            }
+          });
         }
+      };
 
-        if (a.is_pm && !b.is_pm) return -1;
-        if (!a.is_pm && b.is_pm) return 1;
+      // 1. Sheet "Останні візити"
+      addVisitsWorksheet("Останні візити", latestVisits);
 
-        return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
-      });
-
-      const secondSheetData = secondSheetBrands.map(b => ({
-        "Модель": b.name,
-        "Кількість точок": brandCounts[b.name] || 0
-      }));
-
-      if (secondSheetData.length > 0) {
-        const modelColumns = [
-          { header: "Модель", key: "Модель", width: 35 },
-          { header: "Кількість точок", key: "Кількість точок", width: 20 }
-        ];
-        modelWorksheet.columns = modelColumns;
-        modelWorksheet.addRows(secondSheetData);
-
-        // Style header row of second sheet
-        const mHeaderRow = modelWorksheet.getRow(1);
-        mHeaderRow.height = 30;
-        mHeaderRow.eachCell((cell) => {
-          cell.font = { bold: true };
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFDCE6F1' }
-          };
-          cell.alignment = {
-            horizontal: 'center',
-            vertical: 'middle',
-            wrapText: true
-          };
-          cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          };
-        });
-
-        // Add auto-filter to second sheet
-        modelWorksheet.autoFilter = {
-          from: { row: 1, column: 1 },
-          to: { row: 1, column: modelColumns.length }
-        };
-
-        // Add borders to all data cells in second sheet
-        modelWorksheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1) { // Skip header
-            row.eachCell({ includeEmpty: true }, (cell) => {
-              cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-              };
-            });
-          }
-        });
-      }
+      // 2. Sheet "Всі візити"
+      addVisitsWorksheet("Всі візити", allFilteredVisits);
       
       const buffer = await workbook.xlsx.writeBuffer();
       const dateStr = new Date().toISOString().split('T')[0];

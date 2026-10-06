@@ -300,17 +300,6 @@ export default async function handler(req, res) {
       .map((m) => ({ ...m, manufacturerId: asUuidOrNull(m.manufacturerId) }))
       .filter((m) => m.manufacturerId);
 
-    if (mansSelected.length) {
-      const mansToInsert = mansSelected.map((m) => ({
-        visit_id: visit.id,
-        manufacturer_id: m.manufacturerId,
-        pp: m.pp,
-        kv: m.kv,
-      }));
-      const { error: mansErr } = await supabase.from("visit_manufacturers").insert(mansToInsert);
-      if (mansErr) throw mansErr;
-    }
-
     // 5) brands
     const allBrands = [
       ...(modelRange?.selectedHfBrandIds || []),
@@ -318,6 +307,30 @@ export default async function handler(req, res) {
     ]
       .map(asUuidOrNull)
       .filter(Boolean);
+
+    if (mansSelected.length) {
+      let hfId = null;
+      try {
+        const { data: hfRow } = await supabase
+          .from("manufacturers")
+          .select("id")
+          .ilike("name", "%highfoam%")
+          .limit(1)
+          .maybeSingle();
+        if (hfRow?.id) hfId = hfRow.id;
+      } catch (e) {
+        console.warn("Could not find Highfoam manufacturer:", e);
+      }
+
+      const mansToInsert = mansSelected.map((m) => ({
+        visit_id: visit.id,
+        manufacturer_id: m.manufacturerId,
+        pp: m.pp,
+        kv: (hfId && m.manufacturerId === hfId) ? allBrands.length : m.kv,
+      }));
+      const { error: mansErr } = await supabase.from("visit_manufacturers").insert(mansToInsert);
+      if (mansErr) throw mansErr;
+    }
 
     if (allBrands.length) {
       const brandsToInsert = allBrands.map((bid) => ({

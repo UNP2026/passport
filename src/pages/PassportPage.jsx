@@ -710,11 +710,60 @@ empty
   }
 
   
+  const hfManufacturer = useMemo(() => {
+    return manufacturersList.find(
+      (m) => (m.label || m.name || "").trim().toLowerCase() === "highfoam"
+    )
+  }, [manufacturersList])
+
+  const totalHfModelsCount = useMemo(() => {
+    return (modelRange.selectedHfBrandIds?.length || 0) + (modelRange.selectedPmBrandIds?.length || 0)
+  }, [modelRange.selectedHfBrandIds, modelRange.selectedPmBrandIds])
+
   const isHighfoamSelected = useMemo(() => {
-    const hf = manufacturersList.find(m => m.label.toLowerCase() === "highfoam")
-    if (!hf) return false
-    return manufacturers.selected.some((x) => x.manufacturerId === hf.id)
-  }, [manufacturers.selected, manufacturersList])
+    if (!hfManufacturer) return false
+    return manufacturers.selected.some((x) => x.manufacturerId === hfManufacturer.id)
+  }, [manufacturers.selected, hfManufacturer])
+
+  const isEditingHighfoam = Boolean(
+    hfManufacturer && manufacturers.activeAddId === hfManufacturer.id
+  )
+
+  // Синхронізація показника К-ть місць (шт) для Highfoam з блоком Модельний ряд (HF + PM)
+  useEffect(() => {
+    if (!hfManufacturer) return
+    setManufacturers((m) => {
+      const hasHf = m.selected.some((x) => x.manufacturerId === hfManufacturer.id)
+      const isEditingHf = m.activeAddId === hfManufacturer.id
+
+      if (!hasHf && !isEditingHf) return m
+
+      let changed = false
+      const nextSelected = m.selected.map((x) => {
+        if (x.manufacturerId === hfManufacturer.id) {
+          if (x.kv !== totalHfModelsCount) {
+            changed = true
+            return { ...x, kv: totalHfModelsCount }
+          }
+        }
+        return x
+      })
+
+      let nextKv = m.kv
+      if (isEditingHf && m.kv !== totalHfModelsCount) {
+        changed = true
+        nextKv = totalHfModelsCount
+      }
+
+      if (!changed) return m
+
+      return {
+        ...m,
+        selected: nextSelected,
+        kv: nextKv,
+      }
+    })
+  }, [hfManufacturer, totalHfModelsCount])
 
   const fetchTTForSelectedOrg = useMemo(() => {
     return (q) => searchTT(orgTT.selectedOrgId, q)
@@ -972,7 +1021,14 @@ empty
 
   function startAddManufacturer(id) {
     if (!id) return
-    setManufacturers((m) => ({ ...m, activeAddId: id, editorOpen: true, pp: 0, kv: 0 }))
+    const isHf = Boolean(hfManufacturer && id === hfManufacturer.id)
+    setManufacturers((m) => ({
+      ...m,
+      activeAddId: id,
+      editorOpen: true,
+      pp: 0,
+      kv: isHf ? totalHfModelsCount : 0,
+    }))
   }
 
   function cancelManufacturerEditor() {
@@ -984,8 +1040,9 @@ empty
       const id = m.activeAddId
       if (!id) return m
 
+      const isHf = Boolean(hfManufacturer && id === hfManufacturer.id)
       const pp = clampInt(m.pp, 0, 9999)
-      const kv = clampInt(m.kv, 0, 9999)
+      const kv = isHf ? totalHfModelsCount : clampInt(m.kv, 0, 9999)
       const exists = m.selected.some((x) => x.manufacturerId === id)
 
       if (exists) {
@@ -1007,11 +1064,12 @@ empty
   function editManufacturer(manufacturerId) {
     const item = manufacturers.selected.find((x) => x.manufacturerId === manufacturerId)
     if (!item) return
+    const isHf = Boolean(hfManufacturer && manufacturerId === hfManufacturer.id)
     setManufacturers((m) => ({
       ...m,
       activeAddId: manufacturerId,
       pp: item.pp,
-      kv: item.kv,
+      kv: isHf ? totalHfModelsCount : item.kv,
       editorOpen: true,
     }))
   }
@@ -1191,12 +1249,20 @@ empty
         throw new Error("Ви не авторизовані. Перезайдіть у систему.");
       }
 
+      const hfId = hfManufacturer?.id;
+      const finalManufacturers = {
+        ...manufacturers,
+        selected: manufacturers.selected.map((m) =>
+          hfId && m.manufacturerId === hfId ? { ...m, kv: totalHfModelsCount } : m
+        ),
+      };
+
       const payload = {
         orgTT,
         address,
         contacts,
         commercial,
-        manufacturers,
+        manufacturers: finalManufacturers,
         modelRange,
         pricing,
         note,
@@ -1945,9 +2011,19 @@ empty
                 <NumberSlider
                   label="К-ть місць (шт)"
                   max={99}
-                  value={manufacturers.kv}
-                  onChange={(v) => setManufacturers((s) => ({ ...s, kv: v }))}
+                  value={isEditingHighfoam ? totalHfModelsCount : manufacturers.kv}
+                  disabled={isEditingHighfoam}
+                  onChange={(v) => {
+                    if (!isEditingHighfoam) {
+                      setManufacturers((s) => ({ ...s, kv: v }))
+                    }
+                  }}
                 />
+                {isEditingHighfoam && (
+                  <p className="text-[11px] text-muted-foreground -mt-2">
+                    Розраховується автоматично за моделями Highfoam та Private Label ({totalHfModelsCount} шт)
+                  </p>
+                )}
 
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <Button
