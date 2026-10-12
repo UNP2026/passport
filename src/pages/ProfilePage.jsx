@@ -66,7 +66,7 @@ export function ProfilePage() {
           </CardContent>
         </Card>
 
-        <div className="pt-4">
+        <div className="pt-2">
           <MotionButton
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

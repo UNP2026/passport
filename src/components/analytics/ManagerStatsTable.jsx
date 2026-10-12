@@ -37,8 +37,12 @@ export function ManagerStatsTable({ data, agents, activeStat, brands = [] }) {
   const sortedStats = useMemo(() => {
     const sortMap = {
       visits: 'visits',
+      points: 'tts',
+      coverage: 'cities',
       cities: 'cities',
       tt: 'tts',
+      sales: 'visits',
+      places: 'tts',
       brands: 'brands'
     };
     const key = sortMap[activeStat] || 'visits';
@@ -56,8 +60,12 @@ export function ManagerStatsTable({ data, agents, activeStat, brands = [] }) {
         <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-400">Детальна статистика менеджерів</h3>
         <div className="text-[10px] text-muted-foreground uppercase">Сортування: {
           activeStat === 'visits' ? 'Візити' : 
+          activeStat === 'points' ? 'Торгові точки' : 
+          activeStat === 'coverage' ? 'Міста' : 
           activeStat === 'cities' ? 'Міста' : 
-          activeStat === 'tt' ? 'Торгові точки' : 'Моделі'
+          activeStat === 'tt' ? 'Торгові точки' : 
+          activeStat === 'sales' ? 'Візити' : 
+          activeStat === 'places' ? 'Торгові точки' : 'Візити'
         }</div>
       </div>
       <div className="overflow-x-auto">

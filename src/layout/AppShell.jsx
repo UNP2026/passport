@@ -16,9 +16,8 @@ export function AppShell() {
 
   // В паспорте скрываем bottom nav на мобилках
   const hideNav = loc.pathname.startsWith("/app/surveys/new");
-  const isDesktopOnly = loc.pathname.startsWith("/app/analytics") || loc.pathname.startsWith("/app/map");
 
-  if (isDesktopOnly && !isMobile) {
+  if (!isMobile) {
     return (
       <SidebarProvider>
         <div className="h-[100dvh] bg-background text-foreground overflow-hidden">

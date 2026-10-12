@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   const NP_API_URL = "https://api.novaposhta.ua/v2.0/json/";
-  const NP_API_KEY = process.env.NOVA_POSHTA_API_KEY;
+  const NP_API_KEY = process.env.NOVA_POSHTA_API_KEY || "a22af8c3f467933232728b018d0fd7db";
 
   try {
     const { cityRef, search } = req.body;

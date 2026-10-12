@@ -1,39 +1,61 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { fetchRealAnalyticsData, exportFullRawVisits } from "../api/analytics";
 import { AnalyticsFilters } from "../components/analytics/AnalyticsFilters";
-import { BrandHeatmap } from "../components/analytics/BrandHeatmap";
+import { MarketStructureByManufacturers } from "../components/analytics/MarketStructureByManufacturers";
+import { ManagerResultsTable } from "../components/analytics/ManagerResultsTable";
+import { RegionPotentialTable } from "../components/analytics/RegionPotentialTable";
+import { GrowthPointsByClientsTable } from "../components/analytics/GrowthPointsByClientsTable";
+import { TradePointsTable } from "../components/analytics/TradePointsTable";
 import { PointsDetailTable } from "../components/analytics/PointsDetailTable";
 import { BrandSummary } from "../components/analytics/BrandSummary";
+import { ModelAnalysisReport } from "../components/analytics/ModelAnalysisReport";
 import { ManagerStatsTable } from "../components/analytics/ManagerStatsTable";
-import { BarChart3, Map as MapIcon, Users, TrendingUp, Download, LayoutGrid, List, Store, Package, Loader2, Filter } from "lucide-react";
+import { ALL_MAIN_ORG_CODES, getRowMainOrgCode } from "../lib/mainOrgs";
+import { exportShortReport } from "../lib/exportShortReport";
+import { 
+  BarChart3, 
+  MapPin, 
+  Store, 
+  Package, 
+  Loader2, 
+  Download, 
+  FilterX, 
+  TrendingUp,
+  CalendarCheck,
+  BedDouble
+} from "lucide-react";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { useSidebar } from "../context/SidebarContext";
 
 export function AnalyticsPage() {
   const { profile, authLoading } = useAuth();
-  const { isCollapsed, setIsCollapsed, filterContainer } = useSidebar();
-  const [viewMode, setViewMode] = useState("dashboard"); // dashboard or table
-  const [activeStat, setActiveStat] = useState(null); // visits, cities, tt, brands
+  
+  // Switch: "analytics" (Ключова аналітика) vs "models" (Аналіз по моделях)
+  const [viewMode, setViewMode] = useState("analytics");
+  const [activeStat, setActiveStat] = useState(null); // visits, cities, tt, presence
+
+  // Universal Multiselect Filters
   const [filters, setFilters] = useState({
-    city: "all",
-    agent: "all",
-    brand: "all",
-    point: "all",
-    presence: "all",
-    modelType: "all",
-    datePreset: "all",
-    dateFrom: "",
-    dateTo: ""
+    period: { preset: null, startDate: null, endDate: null },
+    mainOrgs: ALL_MAIN_ORG_CODES,
+    managers: [],
+    orgs: [],
+    points: [],
+    oblasts: [],
+    cities: [],
+    manufacturers: [],
+    categories: [],
+    ttTypes: [],
+    presence: "all", // "all" | "yes" | "no"
   });
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingShort, setIsExportingShort] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -45,90 +67,484 @@ export function AnalyticsPage() {
     loadData();
   }, []);
 
-  const displayBrandNames = useMemo(() => {
-    if (!data) return [];
-    if (!filters.modelType || filters.modelType === "all") {
-      return data.brandNames;
-    }
-    return data.allBrands
-      .filter(b => {
-        if (filters.modelType === "highfoam") return b.is_highfoam === true;
-        if (filters.modelType === "privat") return b.is_pm === true;
-        return true;
-      })
-      .map(b => b.name);
-  }, [data, filters.modelType]);
+  const handleResetFilters = () => {
+    setFilters({
+      period: { preset: null, startDate: null, endDate: null },
+      mainOrgs: ALL_MAIN_ORG_CODES,
+      managers: [],
+      orgs: [],
+      points: [],
+      oblasts: [],
+      cities: [],
+      manufacturers: [],
+      categories: [],
+      ttTypes: [],
+      presence: "all",
+    });
+  };
 
-  const displayBrandsForFilter = useMemo(() => {
-    if (!data) return [];
-    return data.brands.filter(b => {
-      const detail = data.allBrands.find(ab => ab.name === b.name);
-      if (!detail) return true;
-      if (filters.modelType === "highfoam") return detail.is_highfoam === true;
-      if (filters.modelType === "privat") return detail.is_pm === true;
+  // Automatically prune orgs or points that belong to a disabled main organization so they don't conflict
+  useEffect(() => {
+    if (!data?.raw) return;
+    setFilters(prev => {
+      if (!prev.mainOrgs || prev.mainOrgs.length === ALL_MAIN_ORG_CODES.length) return prev;
+      let changed = false;
+      const newOrgs = (prev.orgs || []).filter(o => {
+        const rows = data.raw.filter(d => d.org === o);
+        if (rows.length > 0 && rows.every(d => {
+          const code = getRowMainOrgCode(d);
+          return code && !prev.mainOrgs.includes(code);
+        })) {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+
+      const newPoints = (prev.points || []).filter(p => {
+        const rows = data.raw.filter(d => d.point === p);
+        if (rows.length > 0 && rows.every(d => {
+          const code = getRowMainOrgCode(d);
+          return code && !prev.mainOrgs.includes(code);
+        })) {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+
+      if (!changed) return prev;
+      return { ...prev, orgs: newOrgs, points: newPoints };
+    });
+  }, [filters.mainOrgs, data?.raw]);
+
+  // Faceted filtering logic: calculate filteredData, countsData, optionsData, and visitsCountByDate
+  const { filteredData, countsData, optionsData, visitsCountByDate } = useMemo(() => {
+    if (!data?.raw) {
+      return {
+        filteredData: [],
+        countsData: {
+          mainOrgs: {},
+          managers: {},
+          orgs: {},
+          points: {},
+          oblasts: {},
+          cities: {},
+          manufacturers: {},
+          categories: {},
+          ttTypes: {},
+          presence: { all: 0, yes: 0, no: 0 }
+        },
+        optionsData: {
+          managers: [],
+          orgs: [],
+          points: [],
+          oblasts: [],
+          cities: [],
+          manufacturers: [],
+          categories: ["A", "B", "C", "D"],
+          ttTypes: [],
+        },
+        visitsCountByDate: {}
+      };
+    }
+
+    const list = data.raw;
+
+    // Map of latest visit for each unique trade point (list is already sorted by visited_at DESC)
+    const latestVisitsByTt = new Map();
+    list.forEach(d => {
+      const ttKey = d.ttKey || `${d.org}:::${d.point}:::${d.address}`;
+      if (!latestVisitsByTt.has(ttKey)) {
+        latestVisitsByTt.set(ttKey, d);
+      }
+    });
+
+    // Predicates for each individual filter
+    const testMainOrg = (d) => {
+      if (!filters.mainOrgs || filters.mainOrgs.length === ALL_MAIN_ORG_CODES.length) return true;
+      const code = getRowMainOrgCode(d);
+      if (!code) return true; // independent organization, not excluded
+      return filters.mainOrgs.includes(code);
+    };
+
+    const testDate = (d) => {
+      if (!filters.period?.startDate && !filters.period?.endDate) return true;
+      const rowDate = d.date && d.date !== "—" 
+        ? d.date 
+        : (d.visitedAt ? new Date(d.visitedAt).toISOString().split('T')[0] : null);
+      if (!rowDate) return true;
+      if (filters.period.startDate && rowDate < filters.period.startDate) return false;
+      if (filters.period.endDate && rowDate > filters.period.endDate) return false;
+      return true;
+    };
+
+    const testMgr = (d) => filters.managers.length === 0 || filters.managers.includes(d.agent);
+    const testOrg = (d) => filters.orgs.length === 0 || filters.orgs.includes(d.org);
+    const testPt = (d) => filters.points.length === 0 || filters.points.includes(d.point);
+    const testObl = (d) => filters.oblasts.length === 0 || filters.oblasts.includes(d.oblast);
+    const testCity = (d) => filters.cities.length === 0 || filters.cities.includes(d.city);
+    const testMf = (d) => filters.manufacturers.length === 0 || (d.manufacturers || []).some(m => filters.manufacturers.includes(m));
+    const testCat = (d) => filters.categories.length === 0 || filters.categories.includes(d.category);
+    const testType = (d) => filters.ttTypes.length === 0 || filters.ttTypes.includes(d.ttType);
+    const testPres = (d) => {
+      const ttKey = d.ttKey || `${d.org}:::${d.point}:::${d.address}`;
+      const latest = latestVisitsByTt.get(ttKey);
+      const isCoop = latest ? latest.isCooperating === true : d.isCooperating === true;
+      if (filters.presence === "yes") return isCoop === true;
+      if (filters.presence === "no") return isCoop === false;
+      return true;
+    };
+
+    // 1. Calculate final filteredData (matches ALL filters including period and mainOrgs)
+    const filtered = list.filter(d => 
+      testDate(d) &&
+      testMainOrg(d) &&
+      testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && 
+      testMf(d) && testCat(d) && testType(d) && testPres(d)
+    );
+
+    // 2. Faceted counts for each directory (matches all OTHER filters)
+    // Rule: For all filters, count the number of UNIQUE visits (unique trade points: ttKey).
+    // EXCEPT for Торгова точка (points), where count is the TOTAL number of visits to that TT.
+    const managerSets = {};
+    const orgSets = {};
+    const pointVisitsCount = {}; // ОБЩЕЕ количество визитов для каждой ТТ
+    const oblastSets = {};
+    const citySets = {};
+    const manufacturerSets = {};
+    const categorySets = {};
+    const ttTypeSets = {};
+    const presenceSets = { all: new Set(), yes: new Set(), no: new Set() };
+    const mainOrgSets = {};
+    ALL_MAIN_ORG_CODES.forEach(code => {
+      mainOrgSets[code] = new Set();
+    });
+
+    // Count of visits on each date matching other filters (for calendar badges)
+    const visitsCountByDate = {};
+
+    list.forEach(d => {
+      const passPres = testPres(d);
+      const ttKey = d.ttKey || `${d.org}:::${d.point}:::${d.address}`;
+      const passDate = testDate(d);
+      const passMain = testMainOrg(d);
+      const passCommon = passDate && passMain && passPres;
+
+      // Calendar dates: visits count matching all filters EXCEPT the date filter
+      const rowDate = d.date && d.date !== "—" 
+        ? d.date 
+        : (d.visitedAt ? new Date(d.visitedAt).toISOString().split('T')[0] : null);
+      if (rowDate) {
+        if (passMain && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && passPres) {
+          visitsCountByDate[rowDate] = (visitsCountByDate[rowDate] || 0) + 1;
+        }
+      }
+
+      // Main Organizations: all except mainOrg filter -> UNIQUE visits (TTs)
+      const rowMainCode = getRowMainOrgCode(d);
+      if (rowMainCode && mainOrgSets[rowMainCode]) {
+        if (passDate && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && passPres) {
+          mainOrgSets[rowMainCode].add(ttKey);
+        }
+      }
+
+      // Managers: all except manager filter -> UNIQUE visits (TTs)
+      if (passCommon && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+        if (d.agent) {
+          if (!managerSets[d.agent]) managerSets[d.agent] = new Set();
+          managerSets[d.agent].add(ttKey);
+        }
+      }
+
+      // Orgs: all except org filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+        if (d.org) {
+          if (!orgSets[d.org]) orgSets[d.org] = new Set();
+          orgSets[d.org].add(ttKey);
+        }
+      }
+
+      // Points: all except point filter -> ОБЩЕЕ кол-во визитов в эту ТТ
+      if (passCommon && testMgr(d) && testOrg(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+        if (d.point) {
+          pointVisitsCount[d.point] = (pointVisitsCount[d.point] || 0) + 1;
+        }
+      }
+
+      // Oblasts: all except oblast filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+        if (d.oblast) {
+          if (!oblastSets[d.oblast]) oblastSets[d.oblast] = new Set();
+          oblastSets[d.oblast].add(ttKey);
+        }
+      }
+
+      // Cities: all except city filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testMf(d) && testCat(d) && testType(d)) {
+        if (d.city) {
+          if (!citySets[d.city]) citySets[d.city] = new Set();
+          citySets[d.city].add(ttKey);
+        }
+      }
+
+      // Manufacturers: all except manufacturer filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testCat(d) && testType(d)) {
+        (d.manufacturers || []).forEach(m => {
+          if (!manufacturerSets[m]) manufacturerSets[m] = new Set();
+          manufacturerSets[m].add(ttKey);
+        });
+      }
+
+      // Categories: all except category filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testType(d)) {
+        if (d.category) {
+          if (!categorySets[d.category]) categorySets[d.category] = new Set();
+          categorySets[d.category].add(ttKey);
+        }
+      }
+
+      // TT Types: all except ttType filter -> UNIQUE visits (TTs)
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d)) {
+        if (d.ttType) {
+          if (!ttTypeSets[d.ttType]) ttTypeSets[d.ttType] = new Set();
+          ttTypeSets[d.ttType].add(ttKey);
+        }
+      }
+    });
+
+    // Presence counts: calculated by LATEST visit of each unique TT (matches all other filters)
+    latestVisitsByTt.forEach((latestD, ttKey) => {
+      if (testDate(latestD) && testMainOrg(latestD) && testMgr(latestD) && testOrg(latestD) && testPt(latestD) && testObl(latestD) && testCity(latestD) && testMf(latestD) && testCat(latestD) && testType(latestD)) {
+        presenceSets.all.add(ttKey);
+        if (latestD.isCooperating === true) presenceSets.yes.add(ttKey);
+        if (latestD.isCooperating === false) presenceSets.no.add(ttKey);
+      }
+    });
+
+    const setCounts = (mapOfSets) => {
+      const res = {};
+      Object.keys(mapOfSets).forEach(k => {
+        res[k] = mapOfSets[k].size;
+      });
+      return res;
+    };
+
+    const mainOrgsCounts = {};
+    ALL_MAIN_ORG_CODES.forEach(code => {
+      mainOrgsCounts[code] = mainOrgSets[code]?.size || 0;
+    });
+
+    const counts = {
+      mainOrgs: mainOrgsCounts,
+      managers: setCounts(managerSets),
+      orgs: setCounts(orgSets),
+      points: pointVisitsCount,
+      oblasts: setCounts(oblastSets),
+      cities: setCounts(citySets),
+      manufacturers: setCounts(manufacturerSets),
+      categories: setCounts(categorySets),
+      ttTypes: setCounts(ttTypeSets),
+      presence: {
+        all: presenceSets.all.size,
+        yes: presenceSets.yes.size,
+        no: presenceSets.no.size
+      }
+    };
+
+    // Explicit mutual exclusion between Highfoam and Presence "no":
+    const isHfSelected = (filters.manufacturers || []).some(
+      m => m.trim().toLowerCase() === "highfoam"
+    );
+    if (isHfSelected) {
+      counts.presence.no = 0;
+    }
+    if (filters.presence === "no") {
+      Object.keys(counts.manufacturers).forEach(m => {
+        if (m.trim().toLowerCase() === "highfoam") {
+          delete counts.manufacturers[m];
+        }
+      });
+    }
+
+    // Helper to extract mutually exclusive options:
+    const buildOptions = (fullList, countsMap, selectedList) => {
+      const availableSet = new Set(
+        Object.keys(countsMap).filter(k => countsMap[k] > 0)
+      );
+      (selectedList || []).forEach(val => availableSet.add(val));
+      return (fullList || []).filter(item => {
+        const val = typeof item === "string" ? item : item.value;
+        return availableSet.has(val);
+      });
+    };
+
+    // Check if an organization or point belongs to a disabled main organization
+    const isMainOrgDisabledForRow = (d) => {
+      const code = getRowMainOrgCode(d);
+      if (!code) return false;
+      return !filters.mainOrgs.includes(code);
+    };
+
+    // Filter orgs options so that disabled main orgs never appear
+    const rawOrgOptions = buildOptions(data.orgs || [], counts.orgs, filters.orgs);
+    const filteredOrgOptions = rawOrgOptions.filter(orgItem => {
+      const orgVal = typeof orgItem === "string" ? orgItem : orgItem.value;
+      const rows = list.filter(d => d.org === orgVal);
+      if (rows.length > 0 && rows.every(isMainOrgDisabledForRow)) {
+        return false;
+      }
       return true;
     });
-  }, [data, filters.modelType]);
 
-  const filteredData = useMemo(() => {
-    if (!data) return [];
-    return data.raw.filter(d => {
-      const cityMatch = filters.city === "all" || d.city === filters.city;
-      const agentMatch = filters.agent === "all" || d.agent === filters.agent;
-      const brandMatch = filters.brand === "all" || d.brandPresence[filters.brand];
-      const pointMatch = filters.point === "all" || d.point === filters.point;
-      
-      let presenceMatch = true;
-      if (filters.presence === "highfoam") {
-        presenceMatch = d.isCooperating === true;
-      } else if (filters.presence === "competitors") {
-        presenceMatch = d.isCooperating === false;
+    // Filter points options so that disabled main orgs' points never appear
+    const rawPointOptions = buildOptions(data.points || [], counts.points, filters.points);
+    const filteredPointOptions = rawPointOptions.filter(ptItem => {
+      const ptVal = typeof ptItem === "string" ? ptItem : ptItem.value;
+      const rows = list.filter(d => d.point === ptVal);
+      if (rows.length > 0 && rows.every(isMainOrgDisabledForRow)) {
+        return false;
       }
-      
-      let dateMatch = true;
-      if (filters.dateFrom) {
-        dateMatch = dateMatch && d.date >= filters.dateFrom;
-      }
-      if (filters.dateTo) {
-        dateMatch = dateMatch && d.date <= filters.dateTo;
-      }
-
-      let modelTypeMatch = true;
-      if (filters.modelType && filters.modelType !== "all") {
-        const allowedBrands = data.allBrands.filter(b => {
-          if (filters.modelType === "highfoam") return b.is_highfoam === true;
-          if (filters.modelType === "privat") return b.is_pm === true;
-          return true;
-        }).map(b => b.name);
-        
-        modelTypeMatch = allowedBrands.some(bn => d.brandPresence[bn] === true);
-      }
-
-      return cityMatch && agentMatch && brandMatch && pointMatch && presenceMatch && dateMatch && modelTypeMatch;
+      return true;
     });
+
+    const options = {
+      managers: buildOptions(data.agents || [], counts.managers, filters.managers),
+      orgs: filteredOrgOptions,
+      points: filteredPointOptions,
+      oblasts: buildOptions(data.oblasts || [], counts.oblasts, filters.oblasts),
+      cities: buildOptions(data.cities || [], counts.cities, filters.cities),
+      manufacturers: buildOptions(data.manufacturers || [], counts.manufacturers, filters.manufacturers).filter(m => {
+        if (filters.presence === "no") {
+          const val = typeof m === "string" ? m : m.value;
+          return val.trim().toLowerCase() !== "highfoam";
+        }
+        return true;
+      }),
+      categories: buildOptions(data.categories || ["A", "B", "C", "D"], counts.categories, filters.categories),
+      ttTypes: buildOptions(data.ttTypes || [], counts.ttTypes, filters.ttTypes),
+    };
+
+    return { 
+      filteredData: filtered, 
+      countsData: counts, 
+      optionsData: options,
+      visitsCountByDate 
+    };
   }, [data, filters]);
 
-  const stats = useMemo(() => {
+  // Brand names
+  const displayBrandNames = useMemo(() => {
+    return data?.brandNames || [];
+  }, [data]);
+
+  // Extract the latest visit for each unique trade point (uniqueness by Org + Point + Address)
+  const latestFilteredVisits = useMemo(() => {
+    const seenTtKeys = new Set();
+    const result = [];
+    // filteredData preserves descending order of visited_at
+    for (const v of filteredData) {
+      const key = v.ttKey || `${v.org}:::${v.point}:::${v.address}`;
+      if (!seenTtKeys.has(key)) {
+        seenTtKeys.add(key);
+        result.push(v);
+      }
+    }
+    return result;
+  }, [filteredData]);
+
+  // 5 KPI Statistics Cards
+  const keyStats = useMemo(() => {
     if (!data) return [];
+
+    // 1. ВІЗИТИ: загальна к-ть та к-ть унікальних візитів (унікальних ТТ)
     const totalVisits = filteredData.length;
-    const uniqueCities = new Set(filteredData.map(d => d.city)).size;
-    const uniqueTTs = new Set(filteredData.map(d => d.pointId)).size;
-    
-    const presentBrands = new Set();
-    filteredData.forEach(d => {
-      Object.entries(d.brandPresence).forEach(([brand, isPresent]) => {
-        if (isPresent && displayBrandNames.includes(brand)) presentBrands.add(brand);
-      });
-    });
-    const brandsCount = presentBrands.size;
-    
+    const uniqueVisits = latestFilteredVisits.length;
+
+    // 2. ТОРГОВІ ТОЧКИ: загальна к-ть унікальних точок, к-ть де нас немає та частка присутності в %
+    const totalPoints = latestFilteredVisits.length;
+    const pointsWithUs = latestFilteredVisits.filter(d => d.isCooperating).length;
+    const pointsWithoutUs = latestFilteredVisits.filter(d => !d.isCooperating).length;
+    const presenceSharePct = totalPoints > 0 ? Math.round((pointsWithUs / totalPoints) * 100) : 0;
+
+    // 3. ОХВАТ: к-ть унікальних областей та міст
+    const uniqueOblasts = new Set(filteredData.map(d => d.oblast).filter(Boolean)).size;
+    const uniqueCities = new Set(filteredData.map(d => d.city).filter(Boolean)).size;
+
+    // 4. ПРОДАЖІ (тільки з останніх візитів):
+    // загальний потенціал ринку, наші продажі (Highfoam), частка в %, потенціал росту
+    const marketPotential = latestFilteredVisits.reduce((acc, d) => acc + (d.totalPP || 0), 0);
+    const ourSales = latestFilteredVisits.reduce((acc, d) => acc + (d.highfoamPP || 0), 0);
+    const salesSharePct = marketPotential > 0 ? ((ourSales / marketPotential) * 100).toFixed(1) : "0";
+    const growthPotential = Math.max(0, marketPotential - ourSales);
+
+    // 5. К-ТЬ СПАЛЬНИХ МІСЦЬ (тільки з останніх візитів):
+    // загальна к-ть, зайнято нами (Highfoam), частка в %
+    const totalSleepingPlaces = latestFilteredVisits.reduce((acc, d) => acc + (d.totalKV || 0), 0);
+    const ourSleepingPlaces = latestFilteredVisits.reduce((acc, d) => acc + (d.highfoamKV || 0), 0);
+    const placesSharePct = totalSleepingPlaces > 0 ? ((ourSleepingPlaces / totalSleepingPlaces) * 100).toFixed(1) : "0";
+
     return [
-      { id: 'visits', label: "Всього візитів", value: totalVisits, icon: BarChart3, color: "text-indigo-400" },
-      { id: 'cities', label: "Міст охоплено", value: uniqueCities, icon: MapIcon, color: "text-emerald-400" },
-      { id: 'tt', label: "Кількість ТТ", value: uniqueTTs, icon: Store, color: "text-amber-400" },
-      { id: 'brands', label: "Кількість моделей", value: brandsCount, icon: Package, color: "text-cyan-400" },
+      {
+        id: 'visits',
+        title: "Візити",
+        icon: CalendarCheck,
+        color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+        mainValue: totalVisits.toLocaleString('uk-UA'),
+        mainLabel: "Всього візитів",
+        metrics: [
+          { label: "Унікальних візитів", value: `${uniqueVisits.toLocaleString('uk-UA')}` }
+        ]
+      },
+      {
+        id: 'points',
+        title: "Торгові точки",
+        icon: Store,
+        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+        mainValue: `${presenceSharePct}%`,
+        mainLabel: "Частка присутності ЮНП",
+        metrics: [
+          { label: "Всього торгових точок", value: `${totalPoints.toLocaleString('uk-UA')}` },
+          { label: "Без присутності ЮНП", value: `${pointsWithoutUs.toLocaleString('uk-UA')}`, alert: pointsWithoutUs > 0 }
+        ]
+      },
+      {
+        id: 'coverage',
+        title: "Охоплення території",
+        icon: MapPin,
+        color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+        mainValue: `${uniqueCities.toLocaleString('uk-UA')} міст`,
+        mainLabel: "Охоплено міст",
+        metrics: [
+          { label: "Охоплено областей", value: `${uniqueOblasts.toLocaleString('uk-UA')} обл.` }
+        ]
+      },
+      {
+        id: 'sales',
+        title: "Потенціал та продажі",
+        icon: TrendingUp,
+        color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+        mainValue: `${ourSales.toLocaleString('uk-UA')} шт`,
+        mainLabel: `Продажі ЮНП (${salesSharePct}%)`,
+        metrics: [
+          { label: "Потенціал ринку", value: `${marketPotential.toLocaleString('uk-UA')} шт` },
+          { label: "Потенціал росту", value: `+${growthPotential.toLocaleString('uk-UA')} шт`, highlight: true }
+        ]
+      },
+      {
+        id: 'places',
+        title: "Спальні місця",
+        icon: BedDouble,
+        color: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+        mainValue: `${ourSleepingPlaces.toLocaleString('uk-UA')} шт`,
+        mainLabel: `Зайнято ЮНП`,
+        metrics: [
+          { label: "Всього зайнятих місць", value: `${totalSleepingPlaces.toLocaleString('uk-UA')} шт` },
+          { label: "Частка ЮНП", value: `${placesSharePct}%` }
+        ]
+      }
     ];
-  }, [filteredData, data, displayBrandNames]);
+  }, [filteredData, latestFilteredVisits, data]);
 
   const handleStatClick = (statId) => {
     if (activeStat === statId) {
@@ -138,28 +554,21 @@ export function AnalyticsPage() {
     }
   };
 
-  const handleExport = () => {
-    if (!data || !filteredData.length) return;
-
-    const exportData = filteredData.map(d => {
-      const row = {
-        "Дата": d.date,
-        "Місто": d.city,
-        "Менеджер": d.agent,
-        "Торгова точка": d.point,
-      };
-      data.brandNames.forEach(b => {
-        row[b] = d.brandPresence[b] ? "Так" : "Ні";
+  const handleExport = async () => {
+    if (!data || !filteredData.length || isExportingShort) return;
+    setIsExportingShort(true);
+    try {
+      await exportShortReport({
+        data,
+        latestFilteredVisits,
+        keyStats,
+        filters,
       });
-      return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Аналітика");
-    
-    const dateStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `analytics_short_${dateStr}.xlsx`);
+    } catch (err) {
+      console.error("Export short report failed:", err);
+    } finally {
+      setIsExportingShort(false);
+    }
   };
 
   const handleExportFull = async () => {
@@ -175,40 +584,35 @@ export function AnalyticsPage() {
 
       // Filter for all visits that match active filters on screen (without 1-per-TT constraint)
       const allFilteredVisits = visits.filter(v => {
-        const [cityName] = (v.tt?.city || "").split(',').map(s => s.trim());
-        const cityMatch = filters.city === "all" || cityName === filters.city || v.tt?.city === filters.city;
-        const agentMatch = filters.agent === "all" || (v.author?.full_name || "Невідомий") === filters.agent;
-        const brandMatch = filters.brand === "all" || v.visit_brands?.some(vb => vb.brand?.name === filters.brand);
-        const pointMatch = filters.point === "all" || (v.tt?.name || "Невідома ТТ") === filters.point;
-        
-        let presenceMatch = true;
-        if (filters.presence === "highfoam") {
-          presenceMatch = v.is_cooperating === true;
-        } else if (filters.presence === "competitors") {
-          presenceMatch = v.is_cooperating === false;
-        }
+        const [cityName, ...oblastParts] = (v.tt?.city || "").split(',').map(s => s.trim());
+        const city = cityName || "Невідомо";
+        const oblast = oblastParts.join(', ') || "Не вказано";
+        const org = v.tt?.orgs?.name || "Без організації";
+        const point = v.tt?.name || "Невідома ТТ";
+        const agent = v.author?.full_name || "Невідомий";
+        const ttType = v.tt_type?.name || "Не вказано";
 
-        const vDate = v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : "";
-        let dateMatch = true;
-        if (filters.dateFrom) {
-          dateMatch = dateMatch && vDate >= filters.dateFrom;
-        }
-        if (filters.dateTo) {
-          dateMatch = dateMatch && vDate <= filters.dateTo;
-        }
+        const totalPP = v.visit_manufacturers?.reduce((acc, vm) => acc + (vm.pp || 0), 0) || 0;
+        let category = "—";
+        if (totalPP > 29) category = "A";
+        else if (totalPP >= 20) category = "B";
+        else if (totalPP >= 10) category = "C";
+        else if (totalPP > 0) category = "D";
 
-        let modelTypeMatch = true;
-        if (filters.modelType && filters.modelType !== "all") {
-          const allowedBrands = (brandsInfo || []).filter(b => {
-            if (filters.modelType === "highfoam") return b.is_highfoam === true;
-            if (filters.modelType === "privat") return b.is_pm === true;
-            return true;
-          }).map(b => b.name);
-          
-          modelTypeMatch = allowedBrands.some(bn => v.visit_brands?.some(vb => vb.brand?.name === bn));
-        }
+        const mfs = (v.visit_manufacturers || []).map(vm => vm.manufacturer?.name).filter(Boolean);
 
-        return cityMatch && agentMatch && brandMatch && pointMatch && presenceMatch && dateMatch && modelTypeMatch;
+        if (filters.managers?.length && !filters.managers.includes(agent)) return false;
+        if (filters.orgs?.length && !filters.orgs.includes(org)) return false;
+        if (filters.points?.length && !filters.points.includes(point)) return false;
+        if (filters.oblasts?.length && !filters.oblasts.includes(oblast)) return false;
+        if (filters.cities?.length && !filters.cities.includes(city)) return false;
+        if (filters.manufacturers?.length && !mfs.some(m => filters.manufacturers.includes(m))) return false;
+        if (filters.categories?.length && !filters.categories.includes(category)) return false;
+        if (filters.ttTypes?.length && !filters.ttTypes.includes(ttType)) return false;
+        if (filters.presence === "yes" && !v.is_cooperating) return false;
+        if (filters.presence === "no" && v.is_cooperating) return false;
+
+        return true;
       });
 
       // calculate brand presence counts across latestVisits
@@ -238,7 +642,8 @@ export function AnalyticsPage() {
         return (brandCounts[b.name] || 0) - (brandCounts[a.name] || 0);
       }).map(b => b.name);
 
-      const brandNameSet = new Set(sortedBrandNames);
+      const cleanBrandNames = sortedBrandNames.map(b => b.replace(/^ТМ\s+/i, '').trim());
+      const brandNameSet = new Set(cleanBrandNames);
 
       const formatOnlyDate = (d) => {
         if (!d) return "—";
@@ -264,7 +669,6 @@ export function AnalyticsPage() {
           const oblast = oblastParts.join(', ') || "";
           const address = `${v.tt?.street || ''} ${v.tt?.house || ''}`.trim();
 
-          // Calculate category using PP (Потенціальні продажі)
           const totalPP = v.visit_manufacturers?.reduce((acc, vm) => acc + (vm.pp || 0), 0) || 0;
           const highfoamPP = v.visit_manufacturers?.find(vm => vm.manufacturer?.name === "Highfoam")?.pp || 0;
           
@@ -287,7 +691,6 @@ export function AnalyticsPage() {
           if (mfs.length === 0) mfs = [null]; // ensure at least one row
 
           const hasHighfoamMfg = mfs.some(m => m?.manufacturer?.name === "Highfoam");
-
           const daysPassed = v.visited_at ? Math.floor((new Date() - new Date(v.visited_at)) / (1000 * 60 * 60 * 24)) : "";
 
           return mfs.map((vm, index) => {
@@ -310,8 +713,8 @@ export function AnalyticsPage() {
               "Днів після візиту": daysPassed,
               "Менеджер": v.author?.full_name || "Невідомий",
               "Категорія точки": category,
-              "Організація": v.tt?.orgs?.name || "Невідома",
               "Код Організації": v.tt?.orgs?.org_code || "",
+              "Організація": v.tt?.orgs?.name || "Невідома",
               "Торгова точка": v.tt?.name || "Невідома ТТ",
               "Місто": city,
               "Область": oblast,
@@ -343,7 +746,8 @@ export function AnalyticsPage() {
 
             sortedBrandNames.forEach(b => {
                const isPresent = v.visit_brands?.some(vb => vb.brand?.name === b);
-               row[b] = isPresent ? 1 : "";
+               const cleanHeader = b.replace(/^ТМ\s+/i, '').trim();
+               row[cleanHeader] = isPresent ? 1 : "";
             });
 
             return row;
@@ -361,7 +765,6 @@ export function AnalyticsPage() {
             return { header: key, key: key, width: width };
           });
           worksheet.columns = columns;
-
           worksheet.addRows(finalExportData);
 
           // Styling the header row
@@ -401,7 +804,7 @@ export function AnalyticsPage() {
 
           // Add borders to all data cells
           worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { // Skip header
+            if (rowNumber > 1) {
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.border = {
                   top: { style: 'thin' },
@@ -446,152 +849,246 @@ export function AnalyticsPage() {
     return <Navigate to="/app/surveys/start" replace />;
   }
 
-  const filtersContent = (
-    <AnalyticsFilters 
-      filters={filters} 
-      setFilters={setFilters} 
-      cities={data.cities}
-      agents={data.agents}
-      brands={displayBrandsForFilter}
-      points={data.points}
-    />
-  );
-
-  const collapsedFiltersContent = (
-    <div className="flex flex-col items-center gap-4 py-4">
-      <button 
-        onClick={() => setIsCollapsed(false)}
-        className="p-3 rounded-xl bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
-        title="Відкрити фільтри"
-      >
-        <Filter className="h-5 w-5" />
-      </button>
-    </div>
-  );
-
   return (
     <div className="flex-1 bg-[#0b1220] text-white p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-8">
-      {/* Portal filters to Sidebar if available */}
-      {filterContainer && createPortal(
-        isCollapsed ? collapsedFiltersContent : filtersContent,
-        filterContainer
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Аналітичний дашборд</h1>
-          <p className="text-muted-foreground">Аналіз присутності моделей та ефективності менеджерів</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Аналітика ринку</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Аналіз присутності продукції та показників торгових точок
+          </p>
         </div>
+
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+          {/* Main Switcher: Ключова аналітика / Аналіз по моделях */}
+          <div className="flex bg-slate-200/70 dark:bg-white/5 p-1 rounded-xl border border-slate-300 dark:border-white/10 shadow-inner">
             <button 
-              onClick={() => setViewMode("dashboard")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${viewMode === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg' : 'text-muted-foreground hover:text-white'}`}
+              type="button"
+              onClick={() => setViewMode("analytics")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                viewMode === 'analytics' 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
+                  : 'text-slate-600 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-white'
+              }`}
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Дашборд
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Ключова аналітика</span>
             </button>
             <button 
-              onClick={() => setViewMode("table")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${viewMode === 'table' ? 'bg-indigo-600 text-white shadow-lg' : 'text-muted-foreground hover:text-white'}`}
+              type="button"
+              onClick={() => setViewMode("models")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                viewMode === 'models' 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
+                  : 'text-slate-600 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-white'
+              }`}
             >
-              <List className="h-3.5 w-3.5" />
-              Деталізація
+              <Package className="h-3.5 w-3.5" />
+              <span>Аналіз по моделях</span>
             </button>
           </div>
+
+          {/* Export buttons */}
           <div className="flex items-center gap-2">
             <button 
+              type="button"
               onClick={handleExport}
-              disabled={!filteredData.length || isExporting}
-              className="flex items-center gap-2 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-xl transition-all font-medium text-sm border border-indigo-500/20 whitespace-nowrap"
+              disabled={!filteredData.length || isExporting || isExportingShort}
+              className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-600/20 dark:text-indigo-400 dark:hover:bg-indigo-600 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-xl transition-all font-medium text-xs border border-indigo-200 dark:border-indigo-500/20 whitespace-nowrap shadow-sm"
             >
-              <Download className="h-4 w-4" />
-              Коротко
+              {isExportingShort ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              <span>Коротко</span>
             </button>
             <button 
+              type="button"
               onClick={handleExportFull}
-              disabled={isExporting}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-xl transition-all font-medium text-sm text-white shadow-lg shadow-indigo-500/20 whitespace-nowrap"
+              disabled={isExporting || isExportingShort}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-xl transition-all font-medium text-xs text-white shadow-lg shadow-indigo-500/20 whitespace-nowrap"
             >
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Загальний звіт
+              {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              <span>Загальний звіт</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((s) => (
-          <button 
-            key={s.id} 
-            onClick={() => handleStatClick(s.id)}
-            className={`glass p-6 rounded-3xl border transition-all duration-300 text-left group ${
-              activeStat === s.id 
-                ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20" 
-                : "border-white/5 hover:border-white/20 hover:bg-white/5"
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <s.icon className={`h-5 w-5 transition-transform duration-300 group-hover:scale-110 ${s.color}`} />
-              {activeStat === s.id && <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />}
-            </div>
-            <div className="text-2xl font-bold">{s.value}</div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</div>
-          </button>
-        ))}
+      {/* TOP FILTERS BAR (Positioned compactly at the top of the analytics section) */}
+      <div className="relative z-40 mb-6">
+        <AnalyticsFilters 
+          filters={filters} 
+          setFilters={setFilters} 
+          optionsData={optionsData}
+          countsData={countsData}
+          visitsCountByDate={visitsCountByDate}
+          onReset={handleResetFilters}
+        />
       </div>
 
-      {/* Detailed Manager Stats (Collapsible) */}
-      {activeStat && (
-         <div className="mb-8">
-          <ManagerStatsTable 
-            data={filteredData} 
-            agents={data.agents} 
-            activeStat={activeStat}
-            brands={displayBrandNames}
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar Filters - Only show here if portal is not available (e.g. mobile) */}
-        {!filterContainer && (
-          <div className="w-full lg:w-64 shrink-0 glass p-6 rounded-3xl">
-            {filtersContent}
+      {/* EMPTY STATE IF NO DATA MATCHES COMBINATION (FOR ANALYTICS VIEW) */}
+      {filteredData.length === 0 && viewMode === "analytics" ? (
+        <div className="relative z-10 glass p-12 rounded-3xl border border-white/10 text-center space-y-4 max-w-lg mx-auto my-12 animate-in fade-in zoom-in-95 duration-200">
+          <div className="h-16 w-16 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
+            <FilterX className="h-8 w-8" />
           </div>
-        )}
-
-        {/* Main Content Area */}
-        <div className="flex-1 space-y-8">
-          {viewMode === "dashboard" ? (
-            <>
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-2">
-                  <BrandHeatmap 
-                    data={filteredData} 
-                    brands={displayBrandNames} 
-                    cities={data.cities} 
-                    agents={data.agents}
-                  />
-                </div>
-                <div>
-                  <BrandSummary 
-                    data={filteredData} 
-                    brands={displayBrandNames} 
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <PointsDetailTable 
-              data={filteredData} 
-              brands={displayBrandNames} 
-            />
-          )}
+          <div className="space-y-1.5">
+            <h3 className="text-lg sm:text-xl font-bold text-white">
+              Даних за обраними фільтрами не знайдено
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Жоден візит не відповідає поточній комбінації фільтрів. Спробуйте послабити обмеження або скинути фільтри.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-all shadow-lg shadow-indigo-500/20 inline-flex items-center gap-2"
+            >
+              <FilterX className="h-4 w-4" />
+              <span>Скинути всі фільтри</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* TAB 1: КЛЮЧОВА АНАЛІТИКА */}
+          {viewMode === "analytics" && (
+            <div className="relative z-10 space-y-8 animate-in fade-in duration-200">
+              {/* 5 KPI Stats Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                {keyStats.map((s) => {
+                  const isSelected = activeStat === s.id;
+                  return (
+                    <button 
+                      key={s.id} 
+                      type="button"
+                      onClick={() => handleStatClick(s.id)}
+                      className={`glass p-4 sm:p-5 rounded-3xl border transition-all duration-300 text-left flex flex-col justify-between group ${
+                        isSelected 
+                          ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/25 shadow-xl shadow-indigo-500/15" 
+                          : "border-white/10 hover:border-white/25 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <div>
+                        {/* Top: Icon + Title + active indicator */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 rounded-xl border ${s.color} transition-transform duration-300 group-hover:scale-110`}>
+                              <s.icon className="h-4 w-4" />
+                            </div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-white/90">
+                              {s.title}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+                          )}
+                        </div>
+
+                        {/* Middle: Main Large Metric */}
+                        <div className="space-y-0.5 mb-3">
+                          <div className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                            {s.mainValue}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground font-medium">
+                            {s.mainLabel}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom: Detailed Sub-metrics */}
+                      <div className="pt-3 border-t border-white/5 space-y-1.5 w-full">
+                        {s.metrics.map((m, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-muted-foreground truncate">
+                              {m.label}:
+                            </span>
+                            <span className={`text-[11px] font-semibold shrink-0 ${
+                              m.highlight 
+                                ? "text-emerald-400" 
+                                : m.alert 
+                                ? "text-rose-400" 
+                                : "text-white/90"
+                            }`}>
+                              {m.value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Detailed Manager Stats (Collapsible on tile click) */}
+              {activeStat && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                  <ManagerStatsTable 
+                    data={filteredData} 
+                    agents={data.agents || []} 
+                    activeStat={activeStat}
+                    brands={displayBrandNames}
+                  />
+                </div>
+              )}
+
+              {/* Звіт: Структура ринку за виробниками (з компактною таблицею, графіком праворуч та можливістю згортання) */}
+              <div>
+                <MarketStructureByManufacturers 
+                  data={latestFilteredVisits}
+                  allManufacturers={data.manufacturers || []}
+                />
+              </div>
+
+              {/* Звіт: Результати за менеджерами (з можливістю згортання) */}
+              <div>
+                <ManagerResultsTable 
+                  data={latestFilteredVisits}
+                  agents={data.agents || []}
+                />
+              </div>
+
+              {/* Звіт: Регіони за потенціалом (з можливістю згортання) */}
+              <div>
+                <RegionPotentialTable 
+                  data={latestFilteredVisits}
+                  oblasts={data.oblasts || []}
+                />
+              </div>
+
+              {/* Звіт: Найбільші точки зростання за клієнтами (потенціал зростання >= 20) */}
+              <div>
+                <GrowthPointsByClientsTable 
+                  data={latestFilteredVisits}
+                />
+              </div>
+
+              {/* Звіт: Торгові точки (з карткою торгової точки та історією візитів) */}
+              <div>
+                <TradePointsTable 
+                  data={latestFilteredVisits}
+                  allVisits={data?.raw || []}
+                  allBrands={data?.allBrands || []}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: АНАЛІЗ ПО МОДЕЛЯХ */}
+          {viewMode === "models" && (
+            <div className="relative z-10 space-y-6 animate-in fade-in duration-200">
+              {/* Звіт: Аналіз по моделях (Highfoam vs Privat та список Торгових точок) */}
+              <ModelAnalysisReport
+                data={latestFilteredVisits}
+                allVisits={data?.raw || []}
+                allBrands={data?.allBrands || []}
+              />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
+export default AnalyticsPage;
