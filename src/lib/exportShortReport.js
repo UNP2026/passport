@@ -140,7 +140,7 @@ function drawBarChartImage({
 /**
  * Build Applied Filters Summary text and key-value list
  */
-function getAppliedFiltersData(filters = {}) {
+function getAppliedFiltersData(filters = {}, { isSales = false, currentUserName = "" } = {}) {
   const items = [];
 
   // 1. Period
@@ -175,8 +175,10 @@ function getAppliedFiltersData(filters = {}) {
 
   // 3. Managers
   items.push({
-    label: "Менеджери",
-    value: filters.managers?.length ? filters.managers.join(", ") : "Всі менеджери",
+    label: isSales ? "Менеджер" : "Менеджери",
+    value: isSales 
+      ? (currentUserName || (filters.managers?.length ? filters.managers.join(", ") : "Поточний менеджер"))
+      : (filters.managers?.length ? filters.managers.join(", ") : "Всі менеджери"),
   });
 
   // 4. Orgs
@@ -461,12 +463,14 @@ export async function exportShortReport({
   latestFilteredVisits = [],
   keyStats = [],
   filters = {},
+  isSales = false,
+  currentUserName = "",
 }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Passport Region Analytics";
   wb.created = new Date();
 
-  const filterSummary = getAppliedFiltersData(filters);
+  const filterSummary = getAppliedFiltersData(filters, { isSales, currentUserName });
   const nowFormatted = new Date().toLocaleString("uk-UA");
 
   // =========================================================================

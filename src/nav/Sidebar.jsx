@@ -17,10 +17,10 @@ const ICON_MAP = {
 export function Sidebar() {
   const { profile, signOut } = useAuth();
   const { isCollapsed, setIsCollapsed, setFilterContainer } = useSidebar();
-  const isAdminOrHead = profile?.role === "admin" || profile?.role === "head";
+  const canAccessAnalytics = ["admin", "head", "sales", "agent"].includes(profile?.role);
 
   const filteredItems = NAV_ITEMS.filter(it => {
-    if (it.key === "analytics") return isAdminOrHead;
+    if (it.key === "analytics") return canAccessAnalytics;
     return true;
   });
 

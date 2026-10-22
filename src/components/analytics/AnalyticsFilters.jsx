@@ -251,7 +251,9 @@ export function AnalyticsFilters({
   optionsData = {}, 
   countsData = {},
   visitsCountByDate = {},
-  onReset 
+  onReset,
+  isSales = false,
+  managerName = ""
 }) {
   const isHighfoamSelected = useMemo(() => {
     return (filters.manufacturers || []).some(
@@ -310,7 +312,7 @@ export function AnalyticsFilters({
     if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) {
       count += (ALL_MAIN_ORG_CODES.length - filters.mainOrgs.length);
     }
-    if (filters.managers?.length) count += filters.managers.length;
+    if (!isSales && filters.managers?.length) count += filters.managers.length;
     if (filters.orgs?.length) count += filters.orgs.length;
     if (filters.points?.length) count += filters.points.length;
     if (filters.oblasts?.length) count += filters.oblasts.length;
@@ -320,7 +322,7 @@ export function AnalyticsFilters({
     if (filters.ttTypes?.length) count += filters.ttTypes.length;
     if (filters.presence && filters.presence !== "all") count += 1;
     return count;
-  }, [filters]);
+  }, [filters, isSales]);
 
   const hasActiveFilters = activeCount > 0;
 
@@ -377,14 +379,25 @@ export function AnalyticsFilters({
         />
 
         {/* 1. Менеджер */}
-        <MultiSelectDropdown
-          label="Менеджер"
-          icon={User}
-          selected={filters.managers || []}
-          onChange={(vals) => updateFilterArray("managers", vals)}
-          options={optionsData.managers || []}
-          counts={countsData.managers || {}}
-        />
+        {isSales ? (
+          <div 
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-xs text-indigo-200 select-none cursor-default shadow-sm"
+            title="Відображаються лише ваші показники"
+          >
+            <User className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+            <span className="text-white/60">Менеджер:</span>
+            <span className="font-semibold text-white truncate max-w-[160px]">{managerName || "Ваші показники"}</span>
+          </div>
+        ) : (
+          <MultiSelectDropdown
+            label="Менеджер"
+            icon={User}
+            selected={filters.managers || []}
+            onChange={(vals) => updateFilterArray("managers", vals)}
+            options={optionsData.managers || []}
+            counts={countsData.managers || {}}
+          />
+        )}
 
         {/* 2. Організація */}
         <MultiSelectDropdown

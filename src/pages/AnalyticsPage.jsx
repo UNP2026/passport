@@ -31,8 +31,13 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 export function AnalyticsPage() {
-  const { profile, authLoading } = useAuth();
+  const { user, profile, authLoading } = useAuth();
   
+  const isAdminOrHead = profile?.role === "admin" || profile?.role === "head";
+  const isSales = profile?.role === "sales" || profile?.role === "agent" || (!isAdminOrHead && !!profile);
+  const canAccess = isAdminOrHead || profile?.role === "sales" || profile?.role === "agent";
+  const currentUserId = profile?.user_id || user?.id;
+
   // Switch: "analytics" (Ключова аналітика) vs "models" (Аналіз по моделях)
   const [viewMode, setViewMode] = useState("analytics");
   const [activeStat, setActiveStat] = useState(null); // visits, cities, tt, presence
@@ -59,13 +64,20 @@ export function AnalyticsPage() {
 
   useEffect(() => {
     async function loadData() {
+      if (!profile && authLoading) return;
       setLoading(true);
-      const result = await fetchRealAnalyticsData();
+      const isSalesOnly = !isAdminOrHead;
+      const result = await fetchRealAnalyticsData({
+        userId: currentUserId,
+        isSalesOnly,
+      });
       setData(result);
       setLoading(false);
     }
-    loadData();
-  }, []);
+    if (!authLoading) {
+      loadData();
+    }
+  }, [currentUserId, profile, authLoading, isAdminOrHead]);
 
   const handleResetFilters = () => {
     setFilters({
@@ -179,7 +191,18 @@ export function AnalyticsPage() {
       return true;
     };
 
-    const testMgr = (d) => filters.managers.length === 0 || filters.managers.includes(d.agent);
+    const testMgr = (d) => {
+      if (isSales) {
+        if (currentUserId && d.authorUserId) {
+          return d.authorUserId === currentUserId;
+        }
+        if (profile?.full_name) {
+          return (d.agent || "").trim().toLowerCase() === profile.full_name.trim().toLowerCase();
+        }
+        return true;
+      }
+      return filters.managers.length === 0 || filters.managers.includes(d.agent);
+    };
     const testOrg = (d) => filters.orgs.length === 0 || filters.orgs.includes(d.org);
     const testPt = (d) => filters.points.length === 0 || filters.points.includes(d.point);
     const testObl = (d) => filters.oblasts.length === 0 || filters.oblasts.includes(d.oblast);
@@ -431,7 +454,7 @@ export function AnalyticsPage() {
       optionsData: options,
       visitsCountByDate 
     };
-  }, [data, filters]);
+  }, [data, filters, isSales, currentUserId, profile?.full_name]);
 
   // Brand names
   const displayBrandNames = useMemo(() => {
@@ -563,6 +586,8 @@ export function AnalyticsPage() {
         latestFilteredVisits,
         keyStats,
         filters,
+        isSales,
+        currentUserName: profile?.full_name,
       });
     } catch (err) {
       console.error("Export short report failed:", err);
@@ -574,7 +599,10 @@ export function AnalyticsPage() {
   const handleExportFull = async () => {
     setIsExporting(true);
     try {
-      const { visits, brandsInfo } = await exportFullRawVisits();
+      const { visits, brandsInfo } = await exportFullRawVisits({
+        userId: currentUserId,
+        isSalesOnly: isSales,
+      });
       
       if (!visits || visits.length === 0) return;
 
@@ -843,8 +871,6 @@ export function AnalyticsPage() {
     </div>
   );
 
-  const canAccess = profile?.role === "admin" || profile?.role === "head";
-
   if (!canAccess) {
     return <Navigate to="/app/surveys/start" replace />;
   }
@@ -855,8 +881,10 @@ export function AnalyticsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Аналітика ринку</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Аналіз присутності продукції та показників торгових точок
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            {isSales 
+              ? "Аналіз ваших торгових точок, візитів та присутності продукції" 
+              : "Аналіз присутності продукції та показників торгових точок"}
           </p>
         </div>
 
@@ -922,6 +950,8 @@ export function AnalyticsPage() {
           countsData={countsData}
           visitsCountByDate={visitsCountByDate}
           onReset={handleResetFilters}
+          isSales={isSales}
+          managerName={profile?.full_name}
         />
       </div>
 

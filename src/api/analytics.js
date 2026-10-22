@@ -1,12 +1,13 @@
 import { supabase } from "@/lib/supabase";
 
-export async function fetchRealAnalyticsData() {
-  // 1. Fetch all visits with related data
-  const { data: visits, error: visitsError } = await supabase
+export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = false } = {}) {
+  // 1. Fetch visits with related data (scoped to current user if sales role)
+  let visitsQuery = supabase
     .from("visits")
     .select(`
       id,
       visited_at,
+      author_user_id,
       is_cooperating,
       tt_id,
       tt:tt_id (
@@ -55,8 +56,13 @@ export async function fetchRealAnalyticsData() {
           is_pm
         )
       )
-    `)
-    .order("visited_at", { ascending: false });
+    `);
+
+  if (isSalesOnly && userId) {
+    visitsQuery = visitsQuery.eq("author_user_id", userId);
+  }
+
+  const { data: visits, error: visitsError } = await visitsQuery.order("visited_at", { ascending: false });
 
   if (visitsError) {
     console.error("fetchRealAnalyticsData error:", visitsError);
@@ -169,6 +175,7 @@ export async function fetchRealAnalyticsData() {
 
     return {
       id: v.id,
+      authorUserId: v.author_user_id,
       date: v.visited_at ? new Date(v.visited_at).toISOString().split('T')[0] : "—",
       visitedAt: v.visited_at,
       city,
@@ -246,12 +253,13 @@ export async function fetchRealAnalyticsData() {
   };
 }
 
-export async function exportFullRawVisits() {
-  const { data: visits, error } = await supabase
+export async function exportFullRawVisits({ userId = null, isSalesOnly = false } = {}) {
+  let visitsQuery = supabase
     .from("visits")
     .select(`
       id,
       visited_at,
+      author_user_id,
       is_cooperating,
       tt_id,
       tt (
@@ -293,8 +301,13 @@ export async function exportFullRawVisits() {
         pp,
         kv
       )
-    `)
-    .order("visited_at", { ascending: false });
+    `);
+
+  if (isSalesOnly && userId) {
+    visitsQuery = visitsQuery.eq("author_user_id", userId);
+  }
+
+  const { data: visits, error } = await visitsQuery.order("visited_at", { ascending: false });
 
   if (error) {
     console.error("exportFullRawVisits error:", error);
