@@ -289,7 +289,7 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
           {/* =======================================================================
               LEFT COLUMN: KEY POINT INFORMATION (Compact layout)
              ======================================================================= */}
-          <div className="lg:col-span-7 xl:col-span-7 overflow-y-auto p-3.5 sm:p-4 space-y-3 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 custom-scrollbar">
+          <div className="lg:col-span-7 xl:col-span-7 overflow-y-auto p-3.5 sm:p-4 space-y-3 lg:flex lg:flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 custom-scrollbar">
             
             {/* 1. Quick Metrics Grid (5 Tiles, including Price Segments Donut) */}
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
@@ -491,8 +491,8 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
               </div>
             )}
 
-            {/* 4. Presented Models on Point (Highfoam & Privat) */}
-            <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 space-y-2">
+            {/* 4. Presented Models on Point (Highfoam & Privat) — розтягується на всю вільну висоту колонки */}
+            <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 space-y-2 lg:flex-1 lg:min-h-[14rem] lg:flex lg:flex-col">
               <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-white/10 pb-1.5 flex-wrap gap-2">
                 <div className="flex items-center gap-1.5">
                   <Package className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -515,9 +515,9 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
                   На цій торговій точці немає зафіксованих представлених моделей
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:flex-1 lg:min-h-0">
                   {/* Highfoam models */}
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 space-y-1.5">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 space-y-1.5 flex flex-col min-h-0">
                     <div className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
@@ -529,7 +529,7 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
                         Не представлені
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar pr-0.5">
+                      <div className="flex flex-wrap content-start gap-1 max-h-60 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
                         {highfoamPresented.map((m, idx) => (
                           <span
                             key={idx}
@@ -544,7 +544,7 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
                   </div>
 
                   {/* Privat models */}
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/20 space-y-1.5">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/20 space-y-1.5 flex flex-col min-h-0">
                     <div className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
@@ -556,7 +556,7 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
                         Не представлені
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar pr-0.5">
+                      <div className="flex flex-wrap content-start gap-1 max-h-60 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
                         {privatPresented.map((m, idx) => (
                           <span
                             key={idx}

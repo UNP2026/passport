@@ -223,6 +223,12 @@ function getAppliedFiltersData(filters = {}, { isSales = false, currentUserName 
     value: filters.ttTypes?.length ? filters.ttTypes.join(", ") : "Всі типи точок",
   });
 
+  // 10a. Models Highfoam / Privat
+  const modelsText = (list, all) =>
+    list?.length ? (list.length > 4 ? `${list.length} обрано` : list.join(", ")) : all;
+  items.push({ label: "Моделі Highfoam", value: modelsText(filters.hfModels, "Всі моделі Highfoam") });
+  items.push({ label: "Моделі Privat", value: modelsText(filters.pmModels, "Всі моделі Privat") });
+
   // 11. Presence
   let presenceText = "Всі (без фільтра співпраці)";
   if (filters.presence === "yes") presenceText = "Тільки ті, що співпрацюють з ЮНП";

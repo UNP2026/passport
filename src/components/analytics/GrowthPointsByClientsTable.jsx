@@ -7,7 +7,9 @@ export function GrowthPointsByClientsTable({ data = [] }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortField, setSortField] = useState("growthPotential");
   const [sortDirection, setSortDirection] = useState("desc");
-  const [minGrowthThreshold] = useState(20);
+  // Мінімальний потенціал зростання (за замовчуванням ≥ 20), налаштовується в шапці
+  const [thresholdInput, setThresholdInput] = useState("20");
+  const minGrowthThreshold = Math.max(0, Number(thresholdInput) || 0);
 
   // Group visits by City (and Oblast to avoid ambiguity)
   const { rows, totals, maxGrowth } = useMemo(() => {
@@ -222,6 +224,25 @@ export function GrowthPointsByClientsTable({ data = [] }) {
     return "bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/25";
   };
 
+  const renderThreshold = (visibility) => (
+      <label
+        onClick={(e) => e.stopPropagation()}
+        className={`${visibility} items-center gap-1.5 text-[11px] text-muted-foreground cursor-default`}
+        title="Мінімальний потенціал зростання для міста"
+      >
+        <span>потенціал зростання ≥</span>
+        <input
+          type="number"
+          min={0}
+          step={5}
+          value={thresholdInput}
+          onChange={(e) => setThresholdInput(e.target.value)}
+          className="w-16 bg-[#15213b]/80 border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-indigo-500/50"
+        />
+        <span>шт</span>
+      </label>
+  );
+
   return (
     <div className="glass rounded-3xl border border-white/10 shadow-2xl overflow-hidden p-4 sm:p-5 space-y-3 transition-all duration-300">
       {/* Block Header */}
@@ -237,9 +258,7 @@ export function GrowthPointsByClientsTable({ data = [] }) {
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
               Найбільші точки зростання за клієнтами
             </h2>
-            <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono bg-white/5 border border-white/10 text-muted-foreground">
-              потенціал зростання ≥ {minGrowthThreshold}
-            </span>
+            {renderThreshold("hidden sm:flex")}
           </div>
         </div>
 
@@ -272,6 +291,9 @@ export function GrowthPointsByClientsTable({ data = [] }) {
           </button>
         </div>
       </div>
+
+      {/* Поріг на мобільному */}
+      {!isCollapsed && renderThreshold("flex sm:hidden")}
 
       {/* Block Body */}
       {!isCollapsed && (

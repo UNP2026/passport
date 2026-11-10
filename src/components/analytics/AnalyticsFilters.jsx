@@ -14,7 +14,9 @@ import {
   Factory, 
   Tag, 
   Layers,
-  Calendar
+  Calendar,
+  Package,
+  Boxes
 } from "lucide-react";
 import { PeriodFilterDropdown } from "./PeriodFilterDropdown";
 import { MainOrgsFilterDropdown } from "./MainOrgsFilterDropdown";
@@ -245,85 +247,114 @@ function MultiSelectDropdown({
   );
 }
 
-export function AnalyticsFilters({ 
-  filters, 
-  setFilters, 
-  optionsData = {}, 
-  countsData = {},
-  visitsCountByDate = {},
-  onReset,
-  isSales = false,
-  managerName = ""
-}) {
-  const isHighfoamSelected = useMemo(() => {
-    return (filters.manufacturers || []).some(
-      m => m.trim().toLowerCase() === "highfoam"
-    );
-  }, [filters.manufacturers]);
+const chipCls = "inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg shrink-0";
 
-  const updatePeriod = (newPeriod) => {
-    setFilters(prev => ({
-      ...prev,
-      period: newPeriod
-    }));
-  };
+const fmtDate = (s) => (s ? s.split("-").reverse().join(".") : "");
+const periodLabel = (p) =>
+  p.preset === "today" ? "Сьогодні"
+  : p.preset === "week" ? "Тиждень"
+  : p.preset === "month" ? "Місяць"
+  : `${fmtDate(p.startDate)} — ${fmtDate(p.endDate)}`;
 
-  const updateMainOrgs = (newMainOrgs) => {
-    setFilters(prev => ({
-      ...prev,
-      mainOrgs: newMainOrgs
-    }));
-  };
+const isHighfoamName = (m) => (m || "").trim().toLowerCase() === "highfoam";
 
-  const updateFilterArray = (key, newValues) => {
+// Мультиселект-фільтри: ключ у filters, підпис, підпис у чіпі, іконка
+const MULTI_FILTERS = [
+  { key: "managers", label: "Менеджер", chip: "Менеджер", icon: User, adminOnly: true },
+  { key: "orgs", label: "Організація", chip: "Орг", icon: Building2 },
+  { key: "points", label: "Торгова точка", chip: "ТТ", icon: Store },
+  { key: "oblasts", label: "Область", chip: "Обл", icon: Globe },
+  { key: "cities", label: "Місто", chip: "Місто", icon: MapPin },
+  { key: "manufacturers", label: "Виробник", chip: "Виробник", icon: Factory },
+  { key: "categories", label: "Категорія", chip: "Категорія", icon: Tag },
+  { key: "ttTypes", label: "Тип точки", chip: "Тип", icon: Layers },
+  { key: "hfModels", label: "Моделі Highfoam", chip: "Highfoam", icon: Package },
+  { key: "pmModels", label: "Моделі Privat", chip: "Privat", icon: Boxes },
+];
+
+/**
+ * Спільні дії з фільтрами та список чіпів «Обрано» (для повної панелі та компактної смуги)
+ */
+function useFilterActions({ filters, setFilters, isSales }) {
+  const updatePeriod = (period) => setFilters(prev => ({ ...prev, period }));
+  const updateMainOrgs = (mainOrgs) => setFilters(prev => ({ ...prev, mainOrgs }));
+
+  const updateFilterArray = (key, values) => {
     setFilters(prev => {
-      let nextPresence = prev.presence;
-      if (key === "manufacturers") {
-        const hasHf = newValues.some(m => m.trim().toLowerCase() === "highfoam");
-        if (hasHf && prev.presence === "no") {
-          nextPresence = "all";
-        }
-      }
-      return {
-        ...prev,
-        [key]: newValues,
-        presence: nextPresence
-      };
+      let presence = prev.presence;
+      // «Highfoam» у виробниках і «ЮНП: Ні» взаємовиключні
+      if (key === "manufacturers" && values.some(isHighfoamName) && prev.presence === "no") presence = "all";
+      return { ...prev, [key]: values, presence };
     });
   };
 
   const updatePresence = (val) => {
-    setFilters(prev => {
-      let nextManufacturers = prev.manufacturers || [];
-      if (val === "no") {
-        nextManufacturers = nextManufacturers.filter(m => m.trim().toLowerCase() !== "highfoam");
-      }
-      return {
-        ...prev,
-        presence: val,
-        manufacturers: nextManufacturers
-      };
-    });
+    setFilters(prev => ({
+      ...prev,
+      presence: val,
+      manufacturers: val === "no" ? (prev.manufacturers || []).filter(m => !isHighfoamName(m)) : prev.manufacturers,
+    }));
   };
 
-  const activeCount = useMemo(() => {
-    let count = 0;
-    if (filters.period?.startDate || filters.period?.endDate) count += 1;
-    if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) {
-      count += (ALL_MAIN_ORG_CODES.length - filters.mainOrgs.length);
-    }
-    if (!isSales && filters.managers?.length) count += filters.managers.length;
-    if (filters.orgs?.length) count += filters.orgs.length;
-    if (filters.points?.length) count += filters.points.length;
-    if (filters.oblasts?.length) count += filters.oblasts.length;
-    if (filters.cities?.length) count += filters.cities.length;
-    if (filters.manufacturers?.length) count += filters.manufacturers.length;
-    if (filters.categories?.length) count += filters.categories.length;
-    if (filters.ttTypes?.length) count += filters.ttTypes.length;
-    if (filters.presence && filters.presence !== "all") count += 1;
-    return count;
-  }, [filters, isSales]);
+  const visibleFilters = MULTI_FILTERS.filter(f => !(f.adminOnly && isSales));
 
+  const chips = [];
+  if (filters.period?.startDate || filters.period?.endDate) {
+    chips.push({
+      id: "period", icon: Calendar, label: "Період", value: periodLabel(filters.period),
+      onRemove: () => updatePeriod({ preset: null, startDate: null, endDate: null }),
+    });
+  }
+  if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) {
+    chips.push({
+      id: "mainOrgs", icon: Building2, label: "Основні орг",
+      value: `${filters.mainOrgs.length} з ${ALL_MAIN_ORG_CODES.length}`,
+      onRemove: () => updateMainOrgs([...ALL_MAIN_ORG_CODES]),
+    });
+  }
+  visibleFilters.forEach(f => (filters[f.key] || []).forEach(v => chips.push({
+    id: `${f.key}-${v}`, label: f.chip, value: v,
+    onRemove: () => updateFilterArray(f.key, (filters[f.key] || []).filter(x => x !== v)),
+  })));
+  if (filters.presence && filters.presence !== "all") {
+    chips.push({
+      id: "presence", label: "ЮНП", value: filters.presence === "yes" ? "Так" : "Ні",
+      onRemove: () => updatePresence("all"),
+    });
+  }
+
+  return { updatePeriod, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips };
+}
+
+function FilterChip({ chip }) {
+  const Icon = chip.icon;
+  return (
+    <span className={chipCls}>
+      {Icon && <Icon className="h-3 w-3 text-indigo-400" />}
+      <span className="text-muted-foreground">{chip.label}:</span>
+      <span className="truncate max-w-[160px]" title={chip.value}>{chip.value}</span>
+      <button type="button" onClick={chip.onRemove} className="hover:text-white transition-colors ml-0.5" title="Прибрати">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+export function AnalyticsFilters({
+  filters,
+  setFilters,
+  optionsData = {},
+  countsData = {},
+  visitsCountByDate = {},
+  onReset,
+  isSales = false,
+  managerName = "",
+  className = "mb-6",
+}) {
+  const { updatePeriod, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips } =
+    useFilterActions({ filters, setFilters, isSales });
+  const isHighfoamSelected = (filters.manufacturers || []).some(isHighfoamName);
+  const activeCount = chips.length;
   const hasActiveFilters = activeCount > 0;
 
   // Category labels mapping (e.g. A -> Категорія A)
@@ -335,7 +366,7 @@ export function AnalyticsFilters({
   }, [optionsData.categories]);
 
   return (
-    <div className="relative z-40 glass-soft rounded-2xl p-3.5 border border-white/10 shadow-xl space-y-3 mb-6">
+    <div className={`relative z-40 glass-soft rounded-2xl p-3.5 border border-white/10 shadow-xl space-y-3 ${className}`}>
       {/* Top Header of Filters Bar */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-indigo-400">
@@ -364,23 +395,23 @@ export function AnalyticsFilters({
 
       {/* Row of Compact Multiselects */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* ФІЛЬТР 1: Період (Сьогодні / Тиждень / Місяць / Календар з кружечками візитів) */}
+        {/* Період (Сьогодні / Тиждень / Місяць / Календар з кружечками візитів) */}
         <PeriodFilterDropdown
           period={filters.period || { preset: null, startDate: null, endDate: null }}
           onChange={updatePeriod}
           visitsCountByDate={visitsCountByDate}
         />
 
-        {/* ФІЛЬТР 2: Основні організації (543, 24169, 31460, 29213, 156735) */}
+        {/* Основні організації (543, 24169, 31460, 29213, 156735) */}
         <MainOrgsFilterDropdown
           selected={filters.mainOrgs || ALL_MAIN_ORG_CODES}
           onChange={updateMainOrgs}
           counts={countsData.mainOrgs || {}}
         />
 
-        {/* 1. Менеджер */}
-        {isSales ? (
-          <div 
+        {/* Менеджер для ролі sales — лише підпис */}
+        {isSales && (
+          <div
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-xs text-indigo-200 select-none cursor-default shadow-sm"
             title="Відображаються лише ваші показники"
           >
@@ -388,88 +419,22 @@ export function AnalyticsFilters({
             <span className="text-white/60">Менеджер:</span>
             <span className="font-semibold text-white truncate max-w-[160px]">{managerName || "Ваші показники"}</span>
           </div>
-        ) : (
-          <MultiSelectDropdown
-            label="Менеджер"
-            icon={User}
-            selected={filters.managers || []}
-            onChange={(vals) => updateFilterArray("managers", vals)}
-            options={optionsData.managers || []}
-            counts={countsData.managers || {}}
-          />
         )}
 
-        {/* 2. Організація */}
-        <MultiSelectDropdown
-          label="Організація"
-          icon={Building2}
-          selected={filters.orgs || []}
-          onChange={(vals) => updateFilterArray("orgs", vals)}
-          options={optionsData.orgs || []}
-          counts={countsData.orgs || {}}
-        />
+        {/* Мультиселекти: менеджер, організація, ТТ, область, місто, виробник, категорія, тип, моделі */}
+        {visibleFilters.map(f => (
+          <MultiSelectDropdown
+            key={f.key}
+            label={f.label}
+            icon={f.icon}
+            selected={filters[f.key] || []}
+            onChange={(vals) => updateFilterArray(f.key, vals)}
+            options={f.key === "categories" ? categoryOptions : (optionsData[f.key] || [])}
+            counts={countsData[f.key] || {}}
+          />
+        ))}
 
-        {/* 3. Торгова точка */}
-        <MultiSelectDropdown
-          label="Торгова точка"
-          icon={Store}
-          selected={filters.points || []}
-          onChange={(vals) => updateFilterArray("points", vals)}
-          options={optionsData.points || []}
-          counts={countsData.points || {}}
-        />
-
-        {/* 4. Область */}
-        <MultiSelectDropdown
-          label="Область"
-          icon={Globe}
-          selected={filters.oblasts || []}
-          onChange={(vals) => updateFilterArray("oblasts", vals)}
-          options={optionsData.oblasts || []}
-          counts={countsData.oblasts || {}}
-        />
-
-        {/* 5. Місто */}
-        <MultiSelectDropdown
-          label="Місто"
-          icon={MapPin}
-          selected={filters.cities || []}
-          onChange={(vals) => updateFilterArray("cities", vals)}
-          options={optionsData.cities || []}
-          counts={countsData.cities || {}}
-        />
-
-        {/* 6. Виробник */}
-        <MultiSelectDropdown
-          label="Виробник"
-          icon={Factory}
-          selected={filters.manufacturers || []}
-          onChange={(vals) => updateFilterArray("manufacturers", vals)}
-          options={optionsData.manufacturers || []}
-          counts={countsData.manufacturers || {}}
-        />
-
-        {/* 7. Категорія */}
-        <MultiSelectDropdown
-          label="Категорія"
-          icon={Tag}
-          selected={filters.categories || []}
-          onChange={(vals) => updateFilterArray("categories", vals)}
-          options={categoryOptions}
-          counts={countsData.categories || {}}
-        />
-
-        {/* 8. Тип точки */}
-        <MultiSelectDropdown
-          label="Тип точки"
-          icon={Layers}
-          selected={filters.ttTypes || []}
-          onChange={(vals) => updateFilterArray("ttTypes", vals)}
-          options={optionsData.ttTypes || []}
-          counts={countsData.ttTypes || {}}
-        />
-
-        {/* 9. Присутність ЮНП (Segmented control: Усі / Так / Ні) */}
+        {/* Присутність ЮНП (Segmented control: Усі / Так / Ні) */}
         <div className="inline-flex items-center bg-white/[0.04] p-0.5 rounded-xl border border-white/10 h-9 shrink-0">
           <span className="text-[11px] text-muted-foreground px-2 font-medium hidden sm:inline">
             ЮНП:
@@ -520,197 +485,111 @@ export function AnalyticsFilters({
           <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mr-1">
             Обрано:
           </span>
-
-          {/* Period chip */}
-          {(filters.period?.startDate || filters.period?.endDate) && (
-            <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg">
-              <Calendar className="h-3 w-3 text-indigo-400" />
-              <span className="text-muted-foreground">Період:</span>{" "}
-              {filters.period.preset === "today"
-                ? "Сьогодні"
-                : filters.period.preset === "week"
-                ? "Тиждень"
-                : filters.period.preset === "month"
-                ? "Місяць"
-                : `${filters.period.startDate ? filters.period.startDate.split('-').reverse().join('.') : ""} — ${filters.period.endDate ? filters.period.endDate.split('-').reverse().join('.') : ""}`}
-              <button
-                type="button"
-                onClick={() => updatePeriod({ preset: null, startDate: null, endDate: null })}
-                className="hover:text-white transition-colors ml-0.5"
-                title="Скинути період"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-
-          {/* Main Orgs chip (shown when some are disabled) */}
-          {filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length && (
-            <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg">
-              <Building2 className="h-3 w-3 text-indigo-400" />
-              <span className="text-muted-foreground">Основні орг:</span> {filters.mainOrgs.length} з {ALL_MAIN_ORG_CODES.length}
-              <button
-                type="button"
-                onClick={() => updateMainOrgs([...ALL_MAIN_ORG_CODES])}
-                className="hover:text-white transition-colors ml-0.5"
-                title="Увімкнути всі основні організації"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-
-          {/* Manager chips */}
-          {filters.managers?.map(m => (
-            <span
-              key={`mgr-${m}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Менеджер:</span> {m}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("managers", filters.managers.filter(x => x !== m))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Org chips */}
-          {filters.orgs?.map(o => (
-            <span
-              key={`org-${o}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Орг:</span> {o}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("orgs", filters.orgs.filter(x => x !== o))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Point chips */}
-          {filters.points?.map(p => (
-            <span
-              key={`pt-${p}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">ТТ:</span> {p}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("points", filters.points.filter(x => x !== p))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Oblast chips */}
-          {filters.oblasts?.map(ob => (
-            <span
-              key={`obl-${ob}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Обл:</span> {ob}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("oblasts", filters.oblasts.filter(x => x !== ob))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* City chips */}
-          {filters.cities?.map(c => (
-            <span
-              key={`cty-${c}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Місто:</span> {c}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("cities", filters.cities.filter(x => x !== c))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Manufacturer chips */}
-          {filters.manufacturers?.map(mf => (
-            <span
-              key={`mf-${mf}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Виробник:</span> {mf}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("manufacturers", filters.manufacturers.filter(x => x !== mf))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Category chips */}
-          {filters.categories?.map(cat => (
-            <span
-              key={`cat-${cat}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Категорія:</span> {cat}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("categories", filters.categories.filter(x => x !== cat))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* TT type chips */}
-          {filters.ttTypes?.map(tt => (
-            <span
-              key={`tt-${tt}`}
-              className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg"
-            >
-              <span className="text-muted-foreground">Тип:</span> {tt}
-              <button
-                type="button"
-                onClick={() => updateFilterArray("ttTypes", filters.ttTypes.filter(x => x !== tt))}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Presence chip */}
-          {filters.presence && filters.presence !== "all" && (
-            <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-lg">
-              <span className="text-muted-foreground">ЮНП:</span> {filters.presence === "yes" ? "Так" : "Ні"}
-              <button
-                type="button"
-                onClick={() => updatePresence("all")}
-                className="hover:text-white transition-colors ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
+          {chips.map(c => <FilterChip key={c.id} chip={c} />)}
         </div>
       )}
+    </div>
+  );
+}
+
+const MAX_BAR_CHIPS = 5;
+
+/**
+ * Компактна смуга фільтрів (як у CRM ACAT): з'являється зверху, коли повна панель
+ * прокручена за край екрана. Кнопка «Фільтри» розкриває повну панель поверх звітів.
+ * children — довільні елементи праворуч (перемикач вкладок).
+ */
+export function CompactFilterBar({ visible, filters, setFilters, isSales, onReset, panelProps, children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const { chips } = useFilterActions({ filters, setFilters, isSales });
+
+  // Закриваємо розкриту панель при поверненні вгору, кліку поза нею та Esc
+  useEffect(() => { if (!visible) setOpen(false); }, [visible]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const shown = chips.slice(0, MAX_BAR_CHIPS);
+  const rest = chips.length - shown.length;
+
+  return (
+    <div className="sticky top-0 z-50 h-0 -mx-4 md:-mx-8">
+      <div
+        ref={ref}
+        className={`absolute inset-x-0 top-0 px-4 md:px-8 pt-2 transition-all duration-200 ${
+          visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
+        }`}
+      >
+        <div className="flex items-center gap-2 h-12 px-3 rounded-2xl bg-[#0f172a] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
+              open ? "bg-indigo-600 text-white border-indigo-500" : "bg-white/5 border-white/10 text-white/90 hover:bg-white/10"
+            }`}
+            title={open ? "Згорнути фільтри" : "Розгорнути всі фільтри"}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            <span>Фільтри</span>
+            {chips.length > 0 && (
+              <span className="inline-flex items-center justify-center px-1.5 text-[10px] font-bold rounded-full bg-indigo-500 text-white leading-4">
+                {chips.length}
+              </span>
+            )}
+            <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-hidden">
+            {chips.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground truncate">Фільтри не обрано — показано всі дані</span>
+            ) : (
+              <>
+                {shown.map(c => <FilterChip key={c.id} chip={c} />)}
+                {rest > 0 && (
+                  <button type="button" onClick={() => setOpen(true)} className="text-[11px] font-semibold text-indigo-300 hover:text-indigo-200 px-1 shrink-0">
+                    +{rest}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {chips.length > 0 && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors font-medium shrink-0"
+            >
+              <FilterX className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Скинути всі</span>
+            </button>
+          )}
+
+          {children && <div className="shrink-0 pl-2 border-l border-white/10">{children}</div>}
+        </div>
+
+        {open && (
+          <div className="mt-2">
+            <AnalyticsFilters
+              {...panelProps}
+              filters={filters}
+              setFilters={setFilters}
+              isSales={isSales}
+              onReset={onReset}
+              className="bg-[#0f172a] shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

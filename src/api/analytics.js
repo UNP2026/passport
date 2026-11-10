@@ -70,7 +70,7 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
   }
 
   // 2. Fetch all brands and manufacturers to know full lists
-  const [brandsRes, mfsRes] = await Promise.all([
+  const [brandsRes, mfsRes, ttRes] = await Promise.all([
     supabase
       .from("brands")
       .select("id, name, is_highfoam, is_pm, pm_org_id")
@@ -79,8 +79,18 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
       .from("manufacturers")
       .select("name")
       .eq("is_active", true)
-      .order("sort_order", { ascending: true })
+      .order("sort_order", { ascending: true }),
+    // Кількість ТТ по організації (для колонки «Кіл-ть ТТ»)
+    supabase
+      .from("tt")
+      .select("org_id")
   ]);
+
+  const ttCountByOrgId = new Map();
+  (ttRes?.data || []).forEach(t => {
+    if (!t.org_id) return;
+    ttCountByOrgId.set(t.org_id, (ttCountByOrgId.get(t.org_id) || 0) + 1);
+  });
 
   const DEFAULT_CATALOG_MODELS = [
     // Highfoam models
@@ -136,6 +146,7 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
     const oblast = oblastParts.join(', ') || "Не вказано";
     const org = v.tt?.orgs?.name || "Без організації";
     const orgCode = v.tt?.orgs?.org_code || "";
+    const orgId = v.tt?.orgs?.id || null;
     const point = v.tt?.name || "Невідома ТТ";
     const agent = v.author?.full_name || "Невідомий";
     const ttType = v.tt_type?.name || "Не вказано";
@@ -182,6 +193,7 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
       oblast,
       org,
       orgCode,
+      orgId,
       agent,
       pointId: v.tt?.id || null,
       point,
@@ -196,6 +208,8 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
       highfoamPP,
       highfoamKV,
       manufacturers: mfs,
+      hfModels,
+      pmModels,
       priceSegLow: v.price_seg_low ?? 0,
       priceSegMid: v.price_seg_mid ?? 0,
       priceSegHigh: v.price_seg_high ?? 0,
@@ -237,6 +251,29 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
 
   const categories = ["A", "B", "C", "D"];
 
+  // Кількість ТТ по організації: з таблиці tt, а якщо вона недоступна — унікальні ТТ з візитів
+  const ttKeysByOrg = new Map();
+  processedData.forEach(d => {
+    const k = d.orgId || d.org;
+    if (!ttKeysByOrg.has(k)) ttKeysByOrg.set(k, new Set());
+    ttKeysByOrg.get(k).add(d.pointId || d.ttKey);
+  });
+  processedData.forEach(d => {
+    const fromVisits = ttKeysByOrg.get(d.orgId || d.org)?.size || 0;
+    const fromTable = d.orgId ? (ttCountByOrgId.get(d.orgId) || 0) : 0;
+    d.orgTtCount = Math.max(fromTable, fromVisits);
+  });
+
+  const byName = (a, b) => a.localeCompare(b, 'uk');
+  const hfModelOptions = [...new Set([
+    ...allBrands.filter(b => b.is_highfoam).map(b => b.name),
+    ...processedData.flatMap(d => d.hfModels),
+  ])].sort(byName);
+  const pmModelOptions = [...new Set([
+    ...allBrands.filter(b => b.is_pm && !b.is_highfoam).map(b => b.name),
+    ...processedData.flatMap(d => d.pmModels),
+  ])].sort(byName);
+
   return {
     raw: processedData,
     brands: sortedBrands,
@@ -249,7 +286,9 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
     agents,
     ttTypes,
     manufacturers,
-    categories
+    categories,
+    hfModels: hfModelOptions,
+    pmModels: pmModelOptions
   };
 }
 

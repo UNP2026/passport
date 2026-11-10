@@ -159,6 +159,7 @@ export function ModelAnalysisReport({
         pointName: p.point || "Невідома ТТ",
         orgName: p.org || "Без організації",
         cityName: p.city || "Невідомо",
+        orgTtCount: p.orgTtCount || 0,
         addressStr: p.address || "Не вказано",
         agentName: p.agent || "Невідомий",
         totalPP: p.totalPP || 0,
@@ -245,6 +246,7 @@ export function ModelAnalysisReport({
         "Торгова точка": p.pointName,
         "Організація": p.orgName,
         "Місто": p.cityName,
+        "Кіл-ть ТТ": p.orgTtCount,
         "Адреса": p.addressStr,
         "Тип ТТ": p.ttType,
         "Менеджер": p.agentName,
@@ -628,6 +630,7 @@ export function ModelAnalysisReport({
                   <th className="p-3 font-semibold text-white/90">Торгова точка</th>
                   <th className="p-3 font-semibold">Організація</th>
                   <th className="p-3 font-semibold">Місто</th>
+                  <th className="p-3 text-center font-semibold whitespace-nowrap" title="Кількість торгових точок організації">Кіл-ть ТТ</th>
                   <th className="p-3 font-semibold">Адреса</th>
                   <th className="p-3 font-semibold">Тип ТТ</th>
                   <th className="p-3 font-semibold">Менеджер</th>
@@ -640,7 +643,7 @@ export function ModelAnalysisReport({
               <tbody className="divide-y divide-white/5">
                 {displayedPoints.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-10 text-center text-muted-foreground">
+                    <td colSpan={11} className="p-10 text-center text-muted-foreground">
                       {pointSearchQuery ? (
                         <span>За запитом «{pointSearchQuery}» точок не знайдено</span>
                       ) : (
@@ -682,6 +685,11 @@ export function ModelAnalysisReport({
                       {/* Місто */}
                       <td className="p-3 text-white/90 font-medium">
                         {point.cityName}
+                      </td>
+
+                      {/* Кіл-ть ТТ організації */}
+                      <td className="p-3 text-center font-mono text-white/90">
+                        {point.orgTtCount || "—"}
                       </td>
 
                       {/* Адреса */}

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { fetchRealAnalyticsData, exportFullRawVisits } from "../api/analytics";
-import { AnalyticsFilters } from "../components/analytics/AnalyticsFilters";
+import { AnalyticsFilters, CompactFilterBar } from "../components/analytics/AnalyticsFilters";
 import { MarketStructureByManufacturers } from "../components/analytics/MarketStructureByManufacturers";
 import { ManagerResultsTable } from "../components/analytics/ManagerResultsTable";
 import { RegionPotentialTable } from "../components/analytics/RegionPotentialTable";
@@ -54,6 +54,8 @@ export function AnalyticsPage() {
     manufacturers: [],
     categories: [],
     ttTypes: [],
+    hfModels: [],
+    pmModels: [],
     presence: "all", // "all" | "yes" | "no"
   });
 
@@ -61,6 +63,19 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingShort, setIsExportingShort] = useState(false);
+
+  // Компактна смуга фільтрів: показуємо, коли повна панель пішла за верхній край екрана
+  const [filtersPanelEl, setFiltersPanelEl] = useState(null);
+  const [showCompactBar, setShowCompactBar] = useState(false);
+  useEffect(() => {
+    if (!filtersPanelEl) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setShowCompactBar(!entry.isIntersecting && entry.boundingClientRect.top < 0),
+      { threshold: 0 }
+    );
+    obs.observe(filtersPanelEl);
+    return () => obs.disconnect();
+  }, [filtersPanelEl]);
 
   useEffect(() => {
     async function loadData() {
@@ -91,6 +106,8 @@ export function AnalyticsPage() {
       manufacturers: [],
       categories: [],
       ttTypes: [],
+      hfModels: [],
+      pmModels: [],
       presence: "all",
     });
   };
@@ -145,6 +162,8 @@ export function AnalyticsPage() {
           manufacturers: {},
           categories: {},
           ttTypes: {},
+          hfModels: {},
+          pmModels: {},
           presence: { all: 0, yes: 0, no: 0 }
         },
         optionsData: {
@@ -156,6 +175,8 @@ export function AnalyticsPage() {
           manufacturers: [],
           categories: ["A", "B", "C", "D"],
           ttTypes: [],
+          hfModels: [],
+          pmModels: [],
         },
         visitsCountByDate: {}
       };
@@ -210,6 +231,10 @@ export function AnalyticsPage() {
     const testMf = (d) => filters.manufacturers.length === 0 || (d.manufacturers || []).some(m => filters.manufacturers.includes(m));
     const testCat = (d) => filters.categories.length === 0 || filters.categories.includes(d.category);
     const testType = (d) => filters.ttTypes.length === 0 || filters.ttTypes.includes(d.ttType);
+    const hfSel = filters.hfModels || [];
+    const pmSel = filters.pmModels || [];
+    const testHf = (d) => hfSel.length === 0 || (d.hfModels || []).some(m => hfSel.includes(m));
+    const testPm = (d) => pmSel.length === 0 || (d.pmModels || []).some(m => pmSel.includes(m));
     const testPres = (d) => {
       const ttKey = d.ttKey || `${d.org}:::${d.point}:::${d.address}`;
       const latest = latestVisitsByTt.get(ttKey);
@@ -224,7 +249,7 @@ export function AnalyticsPage() {
       testDate(d) &&
       testMainOrg(d) &&
       testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && 
-      testMf(d) && testCat(d) && testType(d) && testPres(d)
+      testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d) && testPres(d)
     );
 
     // 2. Faceted counts for each directory (matches all OTHER filters)
@@ -259,7 +284,7 @@ export function AnalyticsPage() {
         ? d.date 
         : (d.visitedAt ? new Date(d.visitedAt).toISOString().split('T')[0] : null);
       if (rowDate) {
-        if (passMain && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && passPres) {
+        if (passMain && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d) && passPres) {
           visitsCountByDate[rowDate] = (visitsCountByDate[rowDate] || 0) + 1;
         }
       }
@@ -267,13 +292,13 @@ export function AnalyticsPage() {
       // Main Organizations: all except mainOrg filter -> UNIQUE visits (TTs)
       const rowMainCode = getRowMainOrgCode(d);
       if (rowMainCode && mainOrgSets[rowMainCode]) {
-        if (passDate && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && passPres) {
+        if (passDate && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d) && passPres) {
           mainOrgSets[rowMainCode].add(ttKey);
         }
       }
 
       // Managers: all except manager filter -> UNIQUE visits (TTs)
-      if (passCommon && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+      if (passCommon && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.agent) {
           if (!managerSets[d.agent]) managerSets[d.agent] = new Set();
           managerSets[d.agent].add(ttKey);
@@ -281,7 +306,7 @@ export function AnalyticsPage() {
       }
 
       // Orgs: all except org filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.org) {
           if (!orgSets[d.org]) orgSets[d.org] = new Set();
           orgSets[d.org].add(ttKey);
@@ -289,14 +314,14 @@ export function AnalyticsPage() {
       }
 
       // Points: all except point filter -> ОБЩЕЕ кол-во визитов в эту ТТ
-      if (passCommon && testMgr(d) && testOrg(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.point) {
           pointVisitsCount[d.point] = (pointVisitsCount[d.point] || 0) + 1;
         }
       }
 
       // Oblasts: all except oblast filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testCity(d) && testMf(d) && testCat(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testCity(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.oblast) {
           if (!oblastSets[d.oblast]) oblastSets[d.oblast] = new Set();
           oblastSets[d.oblast].add(ttKey);
@@ -304,7 +329,7 @@ export function AnalyticsPage() {
       }
 
       // Cities: all except city filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testMf(d) && testCat(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testMf(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.city) {
           if (!citySets[d.city]) citySets[d.city] = new Set();
           citySets[d.city].add(ttKey);
@@ -312,7 +337,7 @@ export function AnalyticsPage() {
       }
 
       // Manufacturers: all except manufacturer filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testCat(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testCat(d) && testType(d) && testHf(d) && testPm(d)) {
         (d.manufacturers || []).forEach(m => {
           if (!manufacturerSets[m]) manufacturerSets[m] = new Set();
           manufacturerSets[m].add(ttKey);
@@ -320,7 +345,7 @@ export function AnalyticsPage() {
       }
 
       // Categories: all except category filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testType(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testType(d) && testHf(d) && testPm(d)) {
         if (d.category) {
           if (!categorySets[d.category]) categorySets[d.category] = new Set();
           categorySets[d.category].add(ttKey);
@@ -328,7 +353,7 @@ export function AnalyticsPage() {
       }
 
       // TT Types: all except ttType filter -> UNIQUE visits (TTs)
-      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d)) {
+      if (passCommon && testMgr(d) && testOrg(d) && testPt(d) && testObl(d) && testCity(d) && testMf(d) && testCat(d) && testHf(d) && testPm(d)) {
         if (d.ttType) {
           if (!ttTypeSets[d.ttType]) ttTypeSets[d.ttType] = new Set();
           ttTypeSets[d.ttType].add(ttKey);
@@ -336,9 +361,31 @@ export function AnalyticsPage() {
       }
     });
 
+    // Моделі Highfoam / Privat: усі фільтри, крім власного -> УНІКАЛЬНІ ТТ
+    const hfModelSets = {};
+    const pmModelSets = {};
+    list.forEach(d => {
+      const ttKey = d.ttKey || `${d.org}:::${d.point}:::${d.address}`;
+      const base = testDate(d) && testMainOrg(d) && testPres(d) && testMgr(d) && testOrg(d) && testPt(d) &&
+        testObl(d) && testCity(d) && testMf(d) && testCat(d) && testType(d);
+      if (!base) return;
+      if (testPm(d)) {
+        (d.hfModels || []).forEach(m => {
+          if (!hfModelSets[m]) hfModelSets[m] = new Set();
+          hfModelSets[m].add(ttKey);
+        });
+      }
+      if (testHf(d)) {
+        (d.pmModels || []).forEach(m => {
+          if (!pmModelSets[m]) pmModelSets[m] = new Set();
+          pmModelSets[m].add(ttKey);
+        });
+      }
+    });
+
     // Presence counts: calculated by LATEST visit of each unique TT (matches all other filters)
     latestVisitsByTt.forEach((latestD, ttKey) => {
-      if (testDate(latestD) && testMainOrg(latestD) && testMgr(latestD) && testOrg(latestD) && testPt(latestD) && testObl(latestD) && testCity(latestD) && testMf(latestD) && testCat(latestD) && testType(latestD)) {
+      if (testDate(latestD) && testMainOrg(latestD) && testMgr(latestD) && testOrg(latestD) && testPt(latestD) && testObl(latestD) && testCity(latestD) && testMf(latestD) && testCat(latestD) && testType(latestD) && testHf(latestD) && testPm(latestD)) {
         presenceSets.all.add(ttKey);
         if (latestD.isCooperating === true) presenceSets.yes.add(ttKey);
         if (latestD.isCooperating === false) presenceSets.no.add(ttKey);
@@ -368,6 +415,8 @@ export function AnalyticsPage() {
       manufacturers: setCounts(manufacturerSets),
       categories: setCounts(categorySets),
       ttTypes: setCounts(ttTypeSets),
+      hfModels: setCounts(hfModelSets),
+      pmModels: setCounts(pmModelSets),
       presence: {
         all: presenceSets.all.size,
         yes: presenceSets.yes.size,
@@ -446,6 +495,8 @@ export function AnalyticsPage() {
       }),
       categories: buildOptions(data.categories || ["A", "B", "C", "D"], counts.categories, filters.categories),
       ttTypes: buildOptions(data.ttTypes || [], counts.ttTypes, filters.ttTypes),
+      hfModels: buildOptions(data.hfModels || [], counts.hfModels, hfSel),
+      pmModels: buildOptions(data.pmModels || [], counts.pmModels, pmSel),
     };
 
     return { 
@@ -637,6 +688,9 @@ export function AnalyticsPage() {
         if (filters.manufacturers?.length && !mfs.some(m => filters.manufacturers.includes(m))) return false;
         if (filters.categories?.length && !filters.categories.includes(category)) return false;
         if (filters.ttTypes?.length && !filters.ttTypes.includes(ttType)) return false;
+        const visitBrandNames = (v.visit_brands || []).map(vb => vb.brand?.name).filter(Boolean);
+        if (filters.hfModels?.length && !visitBrandNames.some(b => filters.hfModels.includes(b))) return false;
+        if (filters.pmModels?.length && !visitBrandNames.some(b => filters.pmModels.includes(b))) return false;
         if (filters.presence === "yes" && !v.is_cooperating) return false;
         if (filters.presence === "no" && v.is_cooperating) return false;
 
@@ -941,8 +995,38 @@ export function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Компактна смуга фільтрів при прокрутці */}
+      <CompactFilterBar
+        visible={showCompactBar}
+        filters={filters}
+        setFilters={setFilters}
+        isSales={isSales}
+        onReset={handleResetFilters}
+        panelProps={{ optionsData, countsData, visitsCountByDate, managerName: profile?.full_name }}
+      >
+        <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10">
+          {[
+            { id: "analytics", icon: BarChart3, label: "Ключова аналітика" },
+            { id: "models", icon: Package, label: "Аналіз по моделях" },
+          ].map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setViewMode(t.id)}
+              title={t.label}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                viewMode === t.id ? "bg-indigo-600 text-white shadow" : "text-muted-foreground hover:text-white"
+              }`}
+            >
+              <t.icon className="h-3.5 w-3.5" />
+              <span className="hidden xl:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </CompactFilterBar>
+
       {/* TOP FILTERS BAR (Positioned compactly at the top of the analytics section) */}
-      <div className="relative z-40 mb-6">
+      <div className="relative z-40 mb-6" ref={setFiltersPanelEl}>
         <AnalyticsFilters 
           filters={filters} 
           setFilters={setFilters} 

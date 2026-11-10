@@ -90,6 +90,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
         city: formattedCity,
         rawCity: v.city,
         oblast: v.oblast || "—",
+        orgTtCount: v.orgTtCount || 0,
         totalPP: v.totalPP || 0,
         highfoamPP: v.highfoamPP || 0,
         totalKV: v.totalKV || 0,
@@ -161,6 +162,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
       "Торгова точка": r.point,
       "Організація": r.org,
       "Місто": r.city,
+      "Кіл-ть ТТ": r.orgTtCount,
       "Загальний потенціал точки": r.totalPP,
       "Продажі ЮНП": r.highfoamPP,
       "Кількість спальних місць": r.totalKV,
@@ -284,12 +286,13 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
         {!isCollapsed && (
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1527]/70 p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[1180px]">
+              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[1255px]">
                 {/* Column definitions */}
                 <colgroup>
                   <col className="w-[180px] min-w-[180px]" />
                   <col className="w-[180px] min-w-[180px]" />
                   <col className="w-[125px] min-w-[125px]" />
+                  <col className="w-[75px]" />
                   <col className="w-[85px]" />
                   <col className="w-[80px]" />
                   <col className="w-[85px]" />
@@ -326,6 +329,14 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                       className={getHeaderClass("city", "text-left pl-3.5 whitespace-nowrap")}
                     >
                       Місто
+                    </th>
+
+                    <th
+                      onClick={() => handleSort("orgTtCount")}
+                      title="Кількість торгових точок організації"
+                      className={getHeaderClass("orgTtCount", "text-center")}
+                    >
+                      Кіл-ть ТТ
                     </th>
 
                     <th
@@ -406,7 +417,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                 <tbody className="divide-y divide-white/5">
                   {sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={13} className="py-8 text-center text-muted-foreground text-xs">
                         Немає даних за обраними фільтрами
                       </td>
                     </tr>
@@ -443,6 +454,11 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                           sortField === "city" ? "bg-indigo-500/[0.08]" : ""
                         }`}>
                           {row.city}
+                        </td>
+
+                        {/* Кіл-ть ТТ організації */}
+                        <td className={getCellClass("orgTtCount", "text-center font-mono")}>
+                          {row.orgTtCount || "—"}
                         </td>
 
                         {/* Загальний потенціал точки */}
