@@ -230,14 +230,14 @@ export function GrowthPointsByClientsTable({ data = [] }) {
         className={`${visibility} items-center gap-1.5 text-[11px] text-muted-foreground cursor-default`}
         title="Мінімальний потенціал зростання для міста"
       >
-        <span>потенціал зростання ≥</span>
+        <span>від</span>
         <input
           type="number"
           min={0}
           step={5}
           value={thresholdInput}
           onChange={(e) => setThresholdInput(e.target.value)}
-          className="w-16 bg-[#15213b]/80 border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-indigo-500/50"
+          className="w-20 bg-[#15213b]/80 border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-indigo-500/50"
         />
         <span>шт</span>
       </label>
@@ -258,11 +258,12 @@ export function GrowthPointsByClientsTable({ data = [] }) {
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
               Найбільші точки зростання за клієнтами
             </h2>
-            {renderThreshold("hidden sm:flex")}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {renderThreshold("hidden sm:flex")}
+
           <button
             type="button"
             onClick={handleExportExcel}
