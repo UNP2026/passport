@@ -184,6 +184,10 @@ export async function fetchRealAnalyticsData({ userId = null, isSalesOnly = fals
       )
     ];
 
+    // Моделі (бренди) на точці: Highfoam та Privat
+    const hfModels = [...new Set((v.visit_brands || []).filter(vb => vb.brand?.is_highfoam).map(vb => vb.brand.name))];
+    const pmModels = [...new Set((v.visit_brands || []).filter(vb => vb.brand?.is_pm && !vb.brand?.is_highfoam).map(vb => vb.brand.name))];
+
     return {
       id: v.id,
       authorUserId: v.author_user_id,
