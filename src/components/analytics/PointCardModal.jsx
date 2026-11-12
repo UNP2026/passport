@@ -232,6 +232,13 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
     };
   }, [point, presentedModels, salesIndex]);
 
+  // Підсумок проданих шт (усі плитки з продажами), окремо по колонках
+  const soldTotals = useMemo(() => {
+    const sum = (list) => list.reduce((a, t) => a + (t.qty || 0), 0);
+    const hf = sum(hfTiles), pm = sum(pmTiles);
+    return { hf, pm, all: hf + pm };
+  }, [hfTiles, pmTiles]);
+
   const tileCounts = useMemo(() => {
     const c = { sold: 0, present: 0, missing: 0, notcrm: 0 };
     [...hfTiles, ...pmTiles].forEach(t => { c[t.status] += 1; });
@@ -566,6 +573,14 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
                   <span className="px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/25 font-semibold text-[10px]">
                     Privat: {privatPresented.length}
                   </span>
+                  {hasSalesPeriod && (
+                    <span
+                      className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-500/30 font-semibold text-[10px]"
+                      title={`Фактичні продажі організації по всіх моделях, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? ", середнє за місяць" : ""})`}
+                    >
+                      Продано: {soldTotals.all ? formatSales(soldTotals.all) : "0"} шт{salesIndex.monthsCount > 1 ? "/міс." : ""}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -589,10 +604,10 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:flex-1 lg:min-h-0">
                   {[
-                    { id: "hf", title: "Highfoam", tiles: hfTiles, presented: highfoamPresented.length,
+                    { id: "hf", title: "Highfoam", tiles: hfTiles, presented: highfoamPresented.length, sold: soldTotals.hf,
                       box: "bg-white dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-500/20",
                       head: "text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500" },
-                    { id: "pm", title: "Privat", tiles: pmTiles, presented: privatPresented.length,
+                    { id: "pm", title: "Privat", tiles: pmTiles, presented: privatPresented.length, sold: soldTotals.pm,
                       box: "bg-white dark:bg-purple-950/20 border-purple-200 dark:border-purple-500/20",
                       head: "text-purple-700 dark:text-purple-300", dot: "bg-purple-500" },
                   ].map(col => (
@@ -601,6 +616,11 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
                         <span className="flex items-center gap-1">
                           <span className={`h-1.5 w-1.5 rounded-full ${col.dot}`} />
                           {col.title} ({col.presented})
+                          {hasSalesPeriod && col.sold > 0 && (
+                            <span className="ml-1 font-mono font-bold text-emerald-700 dark:text-emerald-300" title="Продано по моделях колонки, шт">
+                              · {formatSales(col.sold)} шт
+                            </span>
+                          )}
                         </span>
                         {col.tiles.length > col.presented && (
                           <span className="text-[10px] font-normal text-slate-500 dark:text-muted-foreground" title="Моделі з продажів організації, яких немає на точці">
