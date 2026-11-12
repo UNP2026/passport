@@ -2,8 +2,9 @@ import React, { useMemo, useState } from "react";
 import { Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import * as XLSX from "xlsx";
 import { ManagerResultsChart } from "./ManagerResultsChart";
+import { EMPTY_SALES_INDEX, formatSales, salesForExcel, salesPeriodLabel } from "../../lib/salesUtils";
 
-export function ManagerResultsTable({ data = [], agents = [] }) {
+export function ManagerResultsTable({ data = [], agents = [], salesIndex = EMPTY_SALES_INDEX }) {
   // data is latestFilteredVisits (one latest visit per unique TT)
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortField, setSortField] = useState("sharePct");
@@ -33,6 +34,9 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
       const sharePct = potential > 0 ? (sales / potential) * 100 : 0;
       const growthPotential = Math.max(0, potential - sales);
       const withoutUs = managerVisits.filter(v => !v.isCooperating).length;
+      // Фактичні продажі менеджера (1С) за «Період продаж», середнє за місяць
+      const userId = managerVisits.find(v => v.authorUserId)?.authorUserId || null;
+      const actualSales = salesIndex.manager(userId, agentName);
 
       return {
         name: agentName,
@@ -42,6 +46,7 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
         sharePct,
         growthPotential,
         withoutUs,
+        actualSales,
       };
     });
 
@@ -57,6 +62,7 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
     const totalSharePct = totalPotential > 0 ? (totalSales / totalPotential) * 100 : 0;
     const totalGrowthPotential = Math.max(0, totalPotential - totalSales);
     const totalWithoutUs = activeRows.reduce((acc, r) => acc + r.withoutUs, 0);
+    const totalActualSales = activeRows.reduce((acc, r) => acc + r.actualSales, 0);
 
     return {
       rows: activeRows,
@@ -67,9 +73,10 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
         totalSharePct,
         totalGrowthPotential,
         totalWithoutUs,
+        totalActualSales,
       },
     };
-  }, [data, agents]);
+  }, [data, agents, salesIndex]);
 
   // Sorting
   const sortedRows = useMemo(() => {
@@ -108,6 +115,7 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
       "Кількість ТТ": r.ttCount,
       "Потенціал": r.potential,
       "Продажі ЮНП": r.sales,
+      [`Фактичні продажі (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(r.actualSales),
       "Частка ЮНП": formatPct(r.sharePct),
       "Потенціал зростання": r.growthPotential,
       "Без ЮНП": r.withoutUs,
@@ -118,6 +126,7 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
       "Кількість ТТ": totals.totalTTs,
       "Потенціал": totals.totalPotential,
       "Продажі ЮНП": totals.totalSales,
+      [`Фактичні продажі (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(totals.totalActualSales),
       "Частка ЮНП": formatPct(totals.totalSharePct),
       "Потенціал зростання": totals.totalGrowthPotential,
       "Без ЮНП": totals.totalWithoutUs,
@@ -208,13 +217,14 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
           {/* Left Side: Table Box */}
           <div className="h-full flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#0d1527]/70 p-3 sm:p-4 min-h-[440px]">
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[620px]">
+              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[700px]">
                 {/* Column definitions: generous width for Manager name to avoid wrapping */}
                 <colgroup>
                   <col className="w-[165px] min-w-[165px]" />
                   <col className="w-[64px]" />
                   <col className="w-[76px]" />
                   <col className="w-[76px]" />
+                  <col className="w-[84px]" />
                   <col className="w-[76px]" />
                   <col className="w-[84px]" />
                   <col className="w-[66px]" />
@@ -256,6 +266,14 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
                   </th>
 
                   <th
+                    onClick={() => handleSort("actualSales")}
+                    title={`Фактичні продажі менеджера з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                    className={getHeaderClass("actualSales", "text-center")}
+                  >
+                    Фактичні продажі
+                  </th>
+
+                  <th
                     onClick={() => handleSort("sharePct")}
                     title="Частка ЮНП"
                     className={getHeaderClass("sharePct", "text-center")}
@@ -285,7 +303,7 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
               <tbody className="divide-y divide-white/5">
                 {sortedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground text-xs">
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
                       Немає даних за обраними фільтрами
                     </td>
                   </tr>
@@ -313,6 +331,13 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
                       {/* Продажі ЮНП */}
                       <td className={getCellClass("sales") + " font-mono"}>
                         {row.sales.toLocaleString("uk-UA")}
+                      </td>
+
+                      {/* Фактичні продажі (1С) */}
+                      <td className={getCellClass("actualSales") + " font-mono"}>
+                        <span className={row.actualSales ? "text-emerald-300" : "text-muted-foreground"}>
+                          {formatSales(row.actualSales)}
+                        </span>
                       </td>
 
                       {/* Частка ЮНП */}
@@ -353,6 +378,9 @@ export function ManagerResultsTable({ data = [], agents = [] }) {
                     </td>
                     <td className={`py-3 px-3 text-right font-mono ${sortField === "sales" ? "bg-indigo-500/20 text-indigo-200" : ""}`}>
                       {totals.totalSales.toLocaleString("uk-UA")}
+                    </td>
+                    <td className={`py-3 px-3 text-right font-mono text-emerald-300 ${sortField === "actualSales" ? "bg-indigo-500/20" : ""}`}>
+                      {formatSales(totals.totalActualSales)}
                     </td>
                     <td className={`py-3 px-3 text-center ${sortField === "sharePct" ? "bg-indigo-500/20" : ""}`}>
                       <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-white/10 text-white border border-white/15">

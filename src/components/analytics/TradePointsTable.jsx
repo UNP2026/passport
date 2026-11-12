@@ -2,8 +2,9 @@ import React, { useMemo, useState } from "react";
 import { Store, Download, ChevronDown, ChevronUp, Search, ExternalLink } from "lucide-react";
 import * as XLSX from "xlsx";
 import { PointCardModal } from "./PointCardModal";
+import { EMPTY_SALES_INDEX, formatSales, salesForExcel, salesPeriodLabel } from "../../lib/salesUtils";
 
-export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) {
+export function TradePointsTable({ data = [], allVisits = [], allBrands = [], salesIndex = EMPTY_SALES_INDEX }) {
   // data is latestFilteredVisits (one latest visit per unique TT)
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortField, setSortField] = useState("visitedAt");
@@ -93,6 +94,9 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
         orgTtCount: v.orgTtCount || 0,
         totalPP: v.totalPP || 0,
         highfoamPP: v.highfoamPP || 0,
+        // Фактичні продажі (1С) за «Період продаж»: менеджера ТТ по організації ТТ та всієї організації
+        actualByManager: salesIndex.managerOrg(v.authorUserId, v.orgCode),
+        actualByOrg: salesIndex.org(v.orgCode),
         totalKV: v.totalKV || 0,
         highfoamKV: v.highfoamKV || 0,
         priceSegLow: low,
@@ -108,7 +112,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
         rawVisit: v,
       };
     });
-  }, [data, totalVisitsCountMap]);
+  }, [data, totalVisitsCountMap, salesIndex]);
 
   // Search filter
   const filteredRows = useMemo(() => {
@@ -165,6 +169,8 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
       "Кіл-ть ТТ": r.orgTtCount,
       "Загальний потенціал точки": r.totalPP,
       "Продажі ЮНП": r.highfoamPP,
+      [`Фактичні продажі по менеджеру (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(r.actualByManager),
+      [`Фактичні продажі по організації (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(r.actualByOrg),
       "Кількість спальних місць": r.totalKV,
       "Кількість спальних місць ЮНП": r.highfoamKV,
       "Продає подушки": r.sellsPillows,
@@ -286,7 +292,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
         {!isCollapsed && (
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1527]/70 p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[1255px]">
+              <table className="w-full text-xs sm:text-[13px] text-left border-collapse min-w-[1445px]">
                 {/* Column definitions */}
                 <colgroup>
                   <col className="w-[180px] min-w-[180px]" />
@@ -295,6 +301,8 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                   <col className="w-[75px]" />
                   <col className="w-[85px]" />
                   <col className="w-[80px]" />
+                  <col className="w-[95px]" />
+                  <col className="w-[95px]" />
                   <col className="w-[85px]" />
                   <col className="w-[85px]" />
                   <col className="w-[80px]" />
@@ -353,6 +361,22 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                       className={getHeaderClass("highfoamPP", "text-center")}
                     >
                       Продажі ЮНП
+                    </th>
+
+                    <th
+                      onClick={() => handleSort("actualByManager")}
+                      title={`Фактичні продажі менеджера ТТ по організації ТТ, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                      className={getHeaderClass("actualByManager", "text-center")}
+                    >
+                      Фактичні продажі по менеджеру
+                    </th>
+
+                    <th
+                      onClick={() => handleSort("actualByOrg")}
+                      title={`Фактичні продажі організації ТТ (усі менеджери), шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                      className={getHeaderClass("actualByOrg", "text-center")}
+                    >
+                      Фактичні продажі по організації
                     </th>
 
                     <th
@@ -417,7 +441,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                 <tbody className="divide-y divide-white/5">
                   {sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={15} className="py-8 text-center text-muted-foreground text-xs">
                         Немає даних за обраними фільтрами
                       </td>
                     </tr>
@@ -469,6 +493,20 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [] }) 
                         {/* Продажі ЮНП */}
                         <td className={getCellClass("highfoamPP") + " font-mono"}>
                           {row.highfoamPP.toLocaleString("uk-UA")}
+                        </td>
+
+                        {/* Фактичні продажі по менеджеру (1С) */}
+                        <td className={getCellClass("actualByManager") + " font-mono"}>
+                          <span className={row.actualByManager ? "text-emerald-300" : "text-muted-foreground"}>
+                            {formatSales(row.actualByManager)}
+                          </span>
+                        </td>
+
+                        {/* Фактичні продажі по організації (1С) */}
+                        <td className={getCellClass("actualByOrg") + " font-mono"}>
+                          <span className={row.actualByOrg ? "text-emerald-300" : "text-muted-foreground"}>
+                            {formatSales(row.actualByOrg)}
+                          </span>
                         </td>
 
                         {/* Кількість спальних місць */}

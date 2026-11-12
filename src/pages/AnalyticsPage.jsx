@@ -2,6 +2,9 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { fetchRealAnalyticsData, exportFullRawVisits } from "../api/analytics";
+import { fetchSales } from "../api/sales";
+import { buildSalesIndex, defaultSalesMonths } from "../lib/salesUtils";
+import { SalesDiscrepancyReport } from "../components/analytics/SalesDiscrepancyReport";
 import { AnalyticsFilters, CompactFilterBar } from "../components/analytics/AnalyticsFilters";
 import { MarketStructureByManufacturers } from "../components/analytics/MarketStructureByManufacturers";
 import { ManagerResultsTable } from "../components/analytics/ManagerResultsTable";
@@ -24,7 +27,8 @@ import {
   FilterX, 
   TrendingUp,
   CalendarCheck,
-  BedDouble
+  BedDouble,
+  Receipt
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -38,7 +42,7 @@ export function AnalyticsPage() {
   const canAccess = isAdminOrHead || profile?.role === "sales" || profile?.role === "agent";
   const currentUserId = profile?.user_id || user?.id;
 
-  // Switch: "analytics" (Ключова аналітика) vs "models" (Аналіз по моделях)
+  // Switch: "analytics" (Ключова аналітика) | "models" (Аналіз по моделях) | "sales" (Аналіз фактичних продаж)
   const [viewMode, setViewMode] = useState("analytics");
   const [activeStat, setActiveStat] = useState(null); // visits, cities, tt, presence
 
@@ -57,9 +61,12 @@ export function AnalyticsPage() {
     hfModels: [],
     pmModels: [],
     presence: "all", // "all" | "yes" | "no"
+    salesMonths: [], // Період продаж: ["2026-10"] або діапазон місяців (→ середнє за місяць)
   });
 
   const [data, setData] = useState(null);
+  // Фактичні продажі з 1С (sales_v)
+  const [sales, setSales] = useState({ rows: [], months: [] });
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingShort, setIsExportingShort] = useState(false);
@@ -89,8 +96,15 @@ export function AnalyticsPage() {
       setData(result);
       setLoading(false);
     }
+    async function loadSales() {
+      const res = await fetchSales();
+      setSales({ rows: res.rows, months: res.months });
+      // За замовчуванням — останній місяць, за який є продажі
+      setFilters(prev => (prev.salesMonths?.length ? prev : { ...prev, salesMonths: defaultSalesMonths(res.months) }));
+    }
     if (!authLoading) {
       loadData();
+      loadSales();
     }
   }, [currentUserId, profile, authLoading, isAdminOrHead]);
 
@@ -109,8 +123,15 @@ export function AnalyticsPage() {
       hfModels: [],
       pmModels: [],
       presence: "all",
+      salesMonths: defaultSalesMonths(sales.months),
     });
   };
+
+  // Індекс фактичних продажів за обраний період (середнє за місяць)
+  const salesIndex = useMemo(
+    () => buildSalesIndex(sales.rows, filters.salesMonths || []),
+    [sales.rows, filters.salesMonths]
+  );
 
   // Automatically prune orgs or points that belong to a disabled main organization so they don't conflict
   useEffect(() => {
@@ -969,6 +990,18 @@ export function AnalyticsPage() {
               <Package className="h-3.5 w-3.5" />
               <span>Аналіз по моделях</span>
             </button>
+            <button 
+              type="button"
+              onClick={() => setViewMode("sales")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                viewMode === 'sales' 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
+                  : 'text-slate-600 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-white'
+              }`}
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              <span>Аналіз фактичних продаж</span>
+            </button>
           </div>
 
           {/* Export buttons */}
@@ -1002,12 +1035,13 @@ export function AnalyticsPage() {
         setFilters={setFilters}
         isSales={isSales}
         onReset={handleResetFilters}
-        panelProps={{ optionsData, countsData, visitsCountByDate, managerName: profile?.full_name }}
+        panelProps={{ optionsData, countsData, visitsCountByDate, managerName: profile?.full_name, salesMonthsAvailable: sales.months }}
       >
         <div className="flex bg-white/5 p-0.5 rounded-xl border border-white/10">
           {[
             { id: "analytics", icon: BarChart3, label: "Ключова аналітика" },
             { id: "models", icon: Package, label: "Аналіз по моделях" },
+            { id: "sales", icon: Receipt, label: "Аналіз фактичних продаж" },
           ].map(t => (
             <button
               key={t.id}
@@ -1036,6 +1070,7 @@ export function AnalyticsPage() {
           onReset={handleResetFilters}
           isSales={isSales}
           managerName={profile?.full_name}
+          salesMonthsAvailable={sales.months}
         />
       </div>
 
@@ -1160,6 +1195,7 @@ export function AnalyticsPage() {
                 <ManagerResultsTable 
                   data={latestFilteredVisits}
                   agents={data.agents || []}
+                  salesIndex={salesIndex}
                 />
               </div>
 
@@ -1184,6 +1220,7 @@ export function AnalyticsPage() {
                   data={latestFilteredVisits}
                   allVisits={data?.raw || []}
                   allBrands={data?.allBrands || []}
+                  salesIndex={salesIndex}
                 />
               </div>
             </div>
@@ -1197,6 +1234,18 @@ export function AnalyticsPage() {
                 data={latestFilteredVisits}
                 allVisits={data?.raw || []}
                 allBrands={data?.allBrands || []}
+                salesIndex={salesIndex}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: АНАЛІЗ ФАКТИЧНИХ ПРОДАЖ (розбіжності продажів 1С і CRM) */}
+          {viewMode === "sales" && (
+            <div className="relative z-10 space-y-6 animate-in fade-in duration-200">
+              <SalesDiscrepancyReport
+                rows={sales.rows}
+                months={filters.salesMonths || []}
+                managerFilter={filters.managers || []}
               />
             </div>
           )}

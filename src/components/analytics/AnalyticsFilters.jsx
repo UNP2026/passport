@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import { PeriodFilterDropdown } from "./PeriodFilterDropdown";
 import { MainOrgsFilterDropdown } from "./MainOrgsFilterDropdown";
+import { SalesPeriodDropdown } from "./SalesPeriodDropdown";
+import { Receipt } from "lucide-react";
+import { salesPeriodLabel, defaultSalesMonths, isDefaultSalesMonths } from "../../lib/salesUtils";
 import { ALL_MAIN_ORG_CODES } from "../../lib/mainOrgs";
 
 /**
@@ -275,8 +278,9 @@ const MULTI_FILTERS = [
 /**
  * Спільні дії з фільтрами та список чіпів «Обрано» (для повної панелі та компактної смуги)
  */
-function useFilterActions({ filters, setFilters, isSales }) {
+function useFilterActions({ filters, setFilters, isSales, salesMonthsAvailable = [] }) {
   const updatePeriod = (period) => setFilters(prev => ({ ...prev, period }));
+  const updateSalesMonths = (salesMonths) => setFilters(prev => ({ ...prev, salesMonths }));
   const updateMainOrgs = (mainOrgs) => setFilters(prev => ({ ...prev, mainOrgs }));
 
   const updateFilterArray = (key, values) => {
@@ -305,6 +309,14 @@ function useFilterActions({ filters, setFilters, isSales }) {
       onRemove: () => updatePeriod({ preset: null, startDate: null, endDate: null }),
     });
   }
+  const salesMonths = filters.salesMonths || [];
+  if (salesMonthsAvailable.length && salesMonths.length && !isDefaultSalesMonths(salesMonths, salesMonthsAvailable)) {
+    chips.push({
+      id: "salesMonths", icon: Receipt, label: "Період продаж",
+      value: salesPeriodLabel(salesMonths) + (salesMonths.length > 1 ? ` (сер. ${salesMonths.length} міс.)` : ""),
+      onRemove: () => updateSalesMonths(defaultSalesMonths(salesMonthsAvailable)),
+    });
+  }
   if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) {
     chips.push({
       id: "mainOrgs", icon: Building2, label: "Основні орг",
@@ -323,7 +335,7 @@ function useFilterActions({ filters, setFilters, isSales }) {
     });
   }
 
-  return { updatePeriod, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips };
+  return { updatePeriod, updateSalesMonths, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips };
 }
 
 function FilterChip({ chip }) {
@@ -349,10 +361,11 @@ export function AnalyticsFilters({
   onReset,
   isSales = false,
   managerName = "",
+  salesMonthsAvailable = [],
   className = "mb-6",
 }) {
-  const { updatePeriod, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips } =
-    useFilterActions({ filters, setFilters, isSales });
+  const { updatePeriod, updateSalesMonths, updateMainOrgs, updateFilterArray, updatePresence, visibleFilters, chips } =
+    useFilterActions({ filters, setFilters, isSales, salesMonthsAvailable });
   const isHighfoamSelected = (filters.manufacturers || []).some(isHighfoamName);
   const activeCount = chips.length;
   const hasActiveFilters = activeCount > 0;
@@ -400,6 +413,13 @@ export function AnalyticsFilters({
           period={filters.period || { preset: null, startDate: null, endDate: null }}
           onChange={updatePeriod}
           visitsCountByDate={visitsCountByDate}
+        />
+
+        {/* Період фактичних продаж (з 1С): один місяць або діапазон → середнє за місяць */}
+        <SalesPeriodDropdown
+          available={salesMonthsAvailable}
+          selected={filters.salesMonths || []}
+          onChange={updateSalesMonths}
         />
 
         {/* Основні організації (543, 24169, 31460, 29213, 156735) */}
@@ -502,7 +522,9 @@ const MAX_BAR_CHIPS = 5;
 export function CompactFilterBar({ visible, filters, setFilters, isSales, onReset, panelProps, children }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const { chips } = useFilterActions({ filters, setFilters, isSales });
+  const { chips } = useFilterActions({
+    filters, setFilters, isSales, salesMonthsAvailable: panelProps?.salesMonthsAvailable || [],
+  });
 
   // Закриваємо розкриту панель при поверненні вгору, кліку поза нею та Esc
   useEffect(() => { if (!visible) setOpen(false); }, [visible]);
