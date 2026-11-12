@@ -211,18 +211,11 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
       return { key: `p:${m.id}`, name: m.name, isPm: m.isPm, qty, status: qty > 0 ? "sold" : "present" };
     });
 
-    // Модель, якої немає в CRM: тип (Highfoam / Privat) — за лінійкою (перше слово назви) з довідника, інакше Highfoam
-    const familyPm = new Map();
-    (allBrands || []).forEach(b => {
-      const w = (b?.name || "").toLowerCase().split(/\s+/)[0];
-      if (w) familyPm.set(w, familyPm.get(w) === true || b.is_pm === true);
-    });
-
     orgSales.forEach(sale => {
       if (used.has(sale.key) || !(sale.avg > 0)) return;
-      const isPm = sale.inCrm
-        ? sale.isPm
-        : familyPm.get((sale.name || "").toLowerCase().split(/\s+/)[0]) === true;
+      // Модель, якої немає в CRM, поки що завжди в Highfoam
+      // (пізніше ознака Highfoam / Privat з'явиться в таблиці продажів)
+      const isPm = sale.inCrm ? sale.isPm : false;
       tiles.push({
         key: `s:${sale.key}`,
         name: sale.name,
@@ -237,7 +230,7 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], salesInd
       hfTiles: tiles.filter(t => !t.isPm).sort(sortTiles),
       pmTiles: tiles.filter(t => t.isPm).sort(sortTiles),
     };
-  }, [point, presentedModels, salesIndex, allBrands]);
+  }, [point, presentedModels, salesIndex]);
 
   const tileCounts = useMemo(() => {
     const c = { sold: 0, present: 0, missing: 0, notcrm: 0 };
