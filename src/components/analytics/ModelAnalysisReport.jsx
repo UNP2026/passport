@@ -22,7 +22,15 @@ export function ModelAnalysisReport({
   allVisits = [],     // all visits across database (data?.raw)
   allBrands = [],     // full list of models from directory (regardless of visits)
   salesIndex = EMPTY_SALES_INDEX, // фактичні продажі (1С) за «Період продаж»
+  selectedHfModels = [],          // фільтр «Моделі Highfoam»
+  selectedPmModels = [],          // фільтр «Моделі Privat»
 }) {
+  // Якщо обрано хоча б одну модель у фільтрах — у таблицях лише обрані моделі
+  const modelFilterActive = selectedHfModels.length > 0 || selectedPmModels.length > 0;
+  const selectedModelNames = useMemo(
+    () => new Set([...selectedHfModels, ...selectedPmModels]),
+    [selectedHfModels, selectedPmModels]
+  );
   const [selectedModel, setSelectedModel] = useState(null);
   const [presenceFilter, setPresenceFilter] = useState("present"); // "present" | "absent"
   const [pointSearchQuery, setPointSearchQuery] = useState("");
@@ -102,7 +110,7 @@ export function ModelAnalysisReport({
 
   // Separate Highfoam and Privat models
   const highfoamModels = useMemo(() => {
-    const list = processedModels.filter(m => m.isHighfoam);
+    const list = processedModels.filter(m => m.isHighfoam && (!modelFilterActive || selectedModelNames.has(m.name)));
     return [...list].sort((a, b) => {
       let aVal = a[hfSortField];
       let bVal = b[hfSortField];
@@ -115,10 +123,10 @@ export function ModelAnalysisReport({
       }
       return hfSortDirection === "asc" ? aVal - bVal : bVal - aVal;
     });
-  }, [processedModels, hfSortField, hfSortDirection]);
+  }, [processedModels, hfSortField, hfSortDirection, modelFilterActive, selectedModelNames]);
 
   const privatModels = useMemo(() => {
-    const list = processedModels.filter(m => m.isPm);
+    const list = processedModels.filter(m => m.isPm && (!modelFilterActive || selectedModelNames.has(m.name)));
     return [...list].sort((a, b) => {
       let aVal = a[privatSortField];
       let bVal = b[privatSortField];
@@ -131,17 +139,17 @@ export function ModelAnalysisReport({
       }
       return privatSortDirection === "asc" ? aVal - bVal : bVal - aVal;
     });
-  }, [processedModels, privatSortField, privatSortDirection]);
+  }, [processedModels, privatSortField, privatSortDirection, modelFilterActive, selectedModelNames]);
 
   // Auto-select first model if none selected
   const activeModel = useMemo(() => {
     if (selectedModel) {
-      // Find updated model data
-      const found = processedModels.find(m => m.name === selectedModel.name);
+      // Обрана модель — лише якщо вона є у видимих (відфільтрованих) таблицях
+      const found = [...highfoamModels, ...privatModels].find(m => m.name === selectedModel.name);
       if (found) return found;
     }
     return highfoamModels[0] || privatModels[0] || null;
-  }, [selectedModel, processedModels, highfoamModels, privatModels]);
+  }, [selectedModel, highfoamModels, privatModels]);
 
   // Calculate points for the active model based on presence filter ("present" vs "absent")
   const { presentPoints, absentPoints } = useMemo(() => {
@@ -380,7 +388,7 @@ export function ModelAnalysisReport({
                   {highfoamModels.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                        Моделей Highfoam не знайдено в довіднику
+                        {modelFilterActive ? "У фільтрі не обрано моделей Highfoam" : "Моделей Highfoam не знайдено в довіднику"}
                       </td>
                     </tr>
                   ) : (
@@ -514,7 +522,7 @@ export function ModelAnalysisReport({
                   {privatModels.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                        Моделей Privat не знайдено в довіднику
+                        {modelFilterActive ? "У фільтрі не обрано моделей Privat" : "Моделей Privat не знайдено в довіднику"}
                       </td>
                     </tr>
                   ) : (

@@ -1235,6 +1235,8 @@ export function AnalyticsPage() {
                 allVisits={data?.raw || []}
                 allBrands={data?.allBrands || []}
                 salesIndex={salesIndex}
+                selectedHfModels={filters.hfModels || []}
+                selectedPmModels={filters.pmModels || []}
               />
             </div>
           )}
