@@ -17,6 +17,21 @@ import {
   PieChart,
   Package
 } from "lucide-react";
+import { EMPTY_SALES_INDEX, formatSales, salesPeriodLabel } from "../../lib/salesUtils";
+
+// Плитки моделей у карточці: статус → порядок сортування і кольори
+const TILE_STATUS = {
+  sold:    { order: 0, label: "Є на точці, є продажі",
+             cls: "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-50 dark:border-emerald-400/50" },
+  present: { order: 1, label: "Є на точці, продажів немає",
+             cls: "bg-emerald-50/60 text-emerald-700 border-emerald-200 dark:bg-emerald-500/[0.08] dark:text-emerald-300/80 dark:border-emerald-500/20" },
+  missing: { order: 2, label: "Продажі організації, на точці немає",
+             cls: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/25 dark:text-amber-50 dark:border-amber-400/50" },
+  notcrm:  { order: 3, label: "Продажі організації, моделі немає в CRM",
+             cls: "bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-500/25 dark:text-rose-50 dark:border-rose-400/50" },
+};
+const sortTiles = (a, b) =>
+  TILE_STATUS[a.status].order - TILE_STATUS[b.status].order || (b.qty || 0) - (a.qty || 0) || a.name.localeCompare(b.name, "uk");
 
 /**
  * Compact SVG Donut / Ring chart for Price Segments (Низький, Середній, Високий)
@@ -109,7 +124,7 @@ function PriceSegmentsDonut({ low = 0, mid = 0, high = 0 }) {
   );
 }
 
-export function PointCardModal({ point, allVisits = [], allBrands = [], onClose }) {
+export function PointCardModal({ point, allVisits = [], allBrands = [], salesIndex = EMPTY_SALES_INDEX, onClose }) {
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -178,6 +193,57 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
 
   const highfoamPresented = useMemo(() => presentedModels.filter(m => m.isHighfoam), [presentedModels]);
   const privatPresented = useMemo(() => presentedModels.filter(m => m.isPm), [presentedModels]);
+
+  // Плитки моделей з фактичними продажами організації ТТ за «Період продаж»:
+  //  зелена — є на точці і є продажі; блідо-зелена — є на точці, продажів немає;
+  //  жовта — продажі організації по моделі з CRM, якої немає на точці; червона — моделі немає в CRM.
+  const hasSalesPeriod = (salesIndex.monthsCount || 0) > 0;
+  const { hfTiles, pmTiles } = useMemo(() => {
+    const orgSales = point?.orgCode ? salesIndex.orgModels(point.orgCode) : [];
+    const byId = new Map(orgSales.filter(s => s.brandId).map(s => [s.brandId, s]));
+    const byName = new Map(orgSales.filter(s => s.inCrm).map(s => [s.name.toLowerCase().trim(), s]));
+    const used = new Set();
+
+    const tiles = presentedModels.map(m => {
+      const sale = byId.get(m.id) || byName.get(m.name.toLowerCase().trim());
+      if (sale) used.add(sale.key);
+      const qty = sale?.avg || 0;
+      return { key: `p:${m.id}`, name: m.name, isPm: m.isPm, qty, status: qty > 0 ? "sold" : "present" };
+    });
+
+    // Модель, якої немає в CRM: тип (Highfoam / Privat) — за лінійкою (перше слово назви) з довідника, інакше Highfoam
+    const familyPm = new Map();
+    (allBrands || []).forEach(b => {
+      const w = (b?.name || "").toLowerCase().split(/\s+/)[0];
+      if (w) familyPm.set(w, familyPm.get(w) === true || b.is_pm === true);
+    });
+
+    orgSales.forEach(sale => {
+      if (used.has(sale.key) || !(sale.avg > 0)) return;
+      const isPm = sale.inCrm
+        ? sale.isPm
+        : familyPm.get((sale.name || "").toLowerCase().split(/\s+/)[0]) === true;
+      tiles.push({
+        key: `s:${sale.key}`,
+        name: sale.name,
+        skm: sale.skm,
+        isPm,
+        qty: sale.avg,
+        status: sale.inCrm ? "missing" : "notcrm",
+      });
+    });
+
+    return {
+      hfTiles: tiles.filter(t => !t.isPm).sort(sortTiles),
+      pmTiles: tiles.filter(t => t.isPm).sort(sortTiles),
+    };
+  }, [point, presentedModels, salesIndex, allBrands]);
+
+  const tileCounts = useMemo(() => {
+    const c = { sold: 0, present: 0, missing: 0, notcrm: 0 };
+    [...hfTiles, ...pmTiles].forEach(t => { c[t.status] += 1; });
+    return c;
+  }, [hfTiles, pmTiles]);
 
   // Filter and sort all history visits for this point (by visitedAt descending)
   const historyVisits = useMemo(() => {
@@ -510,65 +576,69 @@ export function PointCardModal({ point, allVisits = [], allBrands = [], onClose 
                 </div>
               </div>
 
-              {presentedModels.length === 0 ? (
+              {/* Легенда кольорів і період фактичних продаж */}
+              {hasSalesPeriod && (
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-500 dark:text-muted-foreground">
+                  <span className="font-semibold">Продажі: {salesPeriodLabel(salesIndex.months)}{salesIndex.monthsCount > 1 ? `, сер./міс.` : ""}</span>
+                  {Object.entries(TILE_STATUS).map(([id, st]) => (
+                    <span key={id} className="inline-flex items-center gap-1" title={st.label}>
+                      <span className={`h-2.5 w-2.5 rounded-sm border ${st.cls}`} />
+                      {st.label}{tileCounts[id] ? ` (${tileCounts[id]})` : ""}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {hfTiles.length === 0 && pmTiles.length === 0 ? (
                 <div className="text-xs text-slate-500 dark:text-muted-foreground italic py-2 text-center bg-white/50 dark:bg-white/[0.01] rounded-xl border border-dashed border-slate-300 dark:border-white/10">
                   На цій торговій точці немає зафіксованих представлених моделей
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:flex-1 lg:min-h-0">
-                  {/* Highfoam models */}
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 space-y-1.5 flex flex-col min-h-0">
-                    <div className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                        Highfoam ({highfoamPresented.length})
-                      </span>
-                    </div>
-                    {highfoamPresented.length === 0 ? (
-                      <div className="text-[10px] text-slate-400 dark:text-muted-foreground/60 italic">
-                        Не представлені
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap content-start gap-1 max-h-60 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
-                        {highfoamPresented.map((m, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-500/25"
-                          >
-                            <CheckCircle2 className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
-                            {m.name}
+                  {[
+                    { id: "hf", title: "Highfoam", tiles: hfTiles, presented: highfoamPresented.length,
+                      box: "bg-white dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-500/20",
+                      head: "text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500" },
+                    { id: "pm", title: "Privat", tiles: pmTiles, presented: privatPresented.length,
+                      box: "bg-white dark:bg-purple-950/20 border-purple-200 dark:border-purple-500/20",
+                      head: "text-purple-700 dark:text-purple-300", dot: "bg-purple-500" },
+                  ].map(col => (
+                    <div key={col.id} className={`p-2.5 rounded-xl border space-y-1.5 flex flex-col min-h-0 ${col.box}`}>
+                      <div className={`text-[11px] font-semibold flex items-center justify-between ${col.head}`}>
+                        <span className="flex items-center gap-1">
+                          <span className={`h-1.5 w-1.5 rounded-full ${col.dot}`} />
+                          {col.title} ({col.presented})
+                        </span>
+                        {col.tiles.length > col.presented && (
+                          <span className="text-[10px] font-normal text-slate-500 dark:text-muted-foreground" title="Моделі з продажів організації, яких немає на точці">
+                            +{col.tiles.length - col.presented} з продажів
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Privat models */}
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/20 space-y-1.5 flex flex-col min-h-0">
-                    <div className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-                        Privat ({privatPresented.length})
-                      </span>
+                      {col.tiles.length === 0 ? (
+                        <div className="text-[10px] text-slate-400 dark:text-muted-foreground/60 italic">
+                          Не представлені
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap content-start gap-1 max-h-60 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
+                          {col.tiles.map(t => (
+                            <span
+                              key={t.key}
+                              title={`${TILE_STATUS[t.status].label}${t.skm ? ` · skm ${t.skm}` : ""}${t.qty ? ` · ${formatSales(t.qty)} шт` : ""}`}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${TILE_STATUS[t.status].cls}`}
+                            >
+                              {t.name}
+                              {t.qty > 0 && (
+                                <span className="font-mono font-bold px-1 rounded bg-black/10 dark:bg-white/15">
+                                  {formatSales(t.qty)}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {privatPresented.length === 0 ? (
-                      <div className="text-[10px] text-slate-400 dark:text-muted-foreground/60 italic">
-                        Не представлені
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap content-start gap-1 max-h-60 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
-                        {privatPresented.map((m, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-200 border border-purple-200 dark:border-purple-500/25"
-                          >
-                            <CheckCircle2 className="h-2.5 w-2.5 text-purple-500 dark:text-purple-400 shrink-0" />
-                            {m.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  ))}
                 </div>
               )}
             </div>

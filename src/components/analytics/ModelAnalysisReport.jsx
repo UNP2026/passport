@@ -810,6 +810,7 @@ export function ModelAnalysisReport({
           point={selectedPointForModal}
           allVisits={allVisits}
           allBrands={allBrands}
+          salesIndex={salesIndex}
           onClose={() => setSelectedPointForModal(null)}
         />
       )}

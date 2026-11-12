@@ -65,6 +65,8 @@ export function buildSalesIndex(rows = [], months = []) {
   const byBrand = new Map();
   const byManagerOrgBrand = new Map();
   const byOrgBrand = new Map();
+  // Продажі організації по моделях (у т.ч. моделі, яких немає в CRM) — для карточки ТТ
+  const byOrgModel = new Map();
   let total = 0;
 
   rows.forEach(r => {
@@ -77,6 +79,23 @@ export function buildSalesIndex(rows = [], months = []) {
     }
     if (r.manager_name) add(byManagerName, norm(r.manager_name), kol);
     add(byOrg, r.org_code, kol);
+    {
+      let models = byOrgModel.get(r.org_code);
+      if (!models) { models = new Map(); byOrgModel.set(r.org_code, models); }
+      const mKey = r.brand_id || `skm:${r.skm}`;
+      const m = models.get(mKey) || {
+        key: mKey,
+        brandId: r.brand_id || null,
+        skm: r.skm,
+        name: r.brand_name || r.model_name_1c || r.skm,
+        inCrm: !!r.model_in_crm,
+        isPm: r.is_pm === true,
+        isHighfoam: r.is_highfoam === true,
+        kol: 0,
+      };
+      m.kol += kol;
+      models.set(mKey, m);
+    }
     if (r.brand_id) {
       add(byBrand, r.brand_id, kol);
       add(byOrgBrand, `${r.org_code}|${r.brand_id}`, kol);
@@ -97,6 +116,9 @@ export function buildSalesIndex(rows = [], months = []) {
     managerOrgBrand: (userId, orgCode, brandId) =>
       userId && orgCode && brandId ? avg(byManagerOrgBrand, `${userId}|${orgCode}|${brandId}`) : 0,
     orgBrand: (orgCode, brandId) => (orgCode && brandId ? avg(byOrgBrand, `${orgCode}|${brandId}`) : 0),
+    // [{ key, brandId, skm, name, inCrm, isPm, isHighfoam, avg }] — моделі з продажами організації
+    orgModels: (orgCode) =>
+      [...(byOrgModel.get(orgCode)?.values() || [])].map(m => ({ ...m, avg: m.kol / divisor })),
   };
 }
 

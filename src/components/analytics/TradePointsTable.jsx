@@ -567,6 +567,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [], sa
           point={selectedPoint} 
           allVisits={allVisits} 
           allBrands={allBrands}
+          salesIndex={salesIndex}
           onClose={() => setSelectedPoint(null)} 
         />
       )}
