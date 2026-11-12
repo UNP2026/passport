@@ -127,10 +127,41 @@ export function AnalyticsPage() {
     });
   };
 
+  // Фактичні продажі з урахуванням фільтрів, що до них застосовні:
+  // Менеджер, Організація, Основні організації, Моделі Highfoam / Privat.
+  // (Область, місто, ТТ, тип, категорія, присутність — це дані візитів, у продажах 1С їх немає.)
+  const salesFilterLabels = useMemo(() => {
+    const l = [];
+    if (filters.managers?.length) l.push("Менеджер");
+    if (filters.orgs?.length) l.push("Організація");
+    if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) l.push("Основні організації");
+    if (filters.hfModels?.length) l.push("Моделі Highfoam");
+    if (filters.pmModels?.length) l.push("Моделі Privat");
+    return l;
+  }, [filters.managers, filters.orgs, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+
+  const filteredSalesRows = useMemo(() => {
+    const norm = (x) => (x || "").trim().toLowerCase();
+    const mgr = new Set((filters.managers || []).map(norm));
+    const orgs = new Set(filters.orgs || []);
+    const models = new Set([...(filters.hfModels || []), ...(filters.pmModels || [])]);
+    const mainOrgsActive = filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length;
+    return sales.rows.filter(r => {
+      if (mgr.size && !mgr.has(norm(r.manager_name))) return false;
+      if (orgs.size && !(r.org_in_crm && orgs.has(r.org_name))) return false;
+      if (mainOrgsActive) {
+        const code = getRowMainOrgCode({ orgCode: r.org_code, org: r.org_name });
+        if (code && !filters.mainOrgs.includes(code)) return false;
+      }
+      if (models.size && !(r.model_in_crm && models.has(r.brand_name))) return false;
+      return true;
+    });
+  }, [sales.rows, filters.managers, filters.orgs, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+
   // Індекс фактичних продажів за обраний період (середнє за місяць)
   const salesIndex = useMemo(
-    () => buildSalesIndex(sales.rows, filters.salesMonths || []),
-    [sales.rows, filters.salesMonths]
+    () => buildSalesIndex(filteredSalesRows, filters.salesMonths || []),
+    [filteredSalesRows, filters.salesMonths]
   );
 
   // Automatically prune orgs or points that belong to a disabled main organization so they don't conflict
@@ -1245,9 +1276,10 @@ export function AnalyticsPage() {
           {viewMode === "sales" && (
             <div className="relative z-10 space-y-6 animate-in fade-in duration-200">
               <SalesDiscrepancyReport
-                rows={sales.rows}
+                rows={filteredSalesRows}
+                hasAnySales={sales.rows.length > 0}
                 months={filters.salesMonths || []}
-                managerFilter={filters.managers || []}
+                appliedFilters={salesFilterLabels}
               />
             </div>
           )}

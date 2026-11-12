@@ -34,7 +34,7 @@ const GROUPS = [
  * продажі по організаціях, моделях або менеджерах, коди яких не знайдено в CRM.
  * Організація може бути в CRM, а модель — ні (і навпаки).
  */
-export function SalesDiscrepancyReport({ rows = [], months = [], managerFilter = [] }) {
+export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months = [], appliedFilters = [] }) {
   const [typeFilter, setTypeFilter] = useState(null); // null | "org" | "model" | "manager"
   const [groupBy, setGroupBy] = useState("detail");
   const [query, setQuery] = useState("");
@@ -45,12 +45,11 @@ export function SalesDiscrepancyReport({ rows = [], months = [], managerFilter =
   const isMulti = months.length > 1;
   const periodLabel = salesPeriodLabel(months);
 
-  // Продажі за період (з урахуванням фільтра «Менеджер»)
+  // Продажі за період (rows уже відфільтровані сторінкою за менеджером, організацією, моделями)
   const periodRows = useMemo(() => {
     const set = new Set(months);
-    const mgr = new Set(managerFilter.map(norm));
-    return rows.filter(r => set.has(r.month) && (!mgr.size || mgr.has(norm(r.manager_name))));
-  }, [rows, months, managerFilter]);
+    return rows.filter(r => set.has(r.month));
+  }, [rows, months]);
 
   const periodTotal = useMemo(() => periodRows.reduce((a, r) => a + r.kol, 0), [periodRows]);
 
@@ -225,6 +224,9 @@ export function SalesDiscrepancyReport({ rows = [], months = [], managerFilter =
               Продажі з 1С, яких не вдалося зіставити з CRM · {periodLabel}
               {isMulti ? ` · середнє за ${months.length} міс.` : ""}
             </p>
+            {appliedFilters.length > 0 && (
+              <p className="text-[11px] text-indigo-300 mt-0.5">Застосовано фільтри: {appliedFilters.join(", ")}</p>
+            )}
           </div>
         </div>
         <button
@@ -244,7 +246,7 @@ export function SalesDiscrepancyReport({ rows = [], months = [], managerFilter =
           <div className="text-xs font-bold uppercase tracking-wider text-white/90 mb-2">Не зіставлено з CRM</div>
           <div className="text-2xl font-extrabold text-white">{formatSales(summary.all / divisor) === "—" ? "0" : formatSales(summary.all / divisor)}</div>
           <div className="text-[11px] text-muted-foreground mt-1">
-            шт{isMulti ? " / міс." : ""} · {sharePct.toFixed(1).replace(".", ",")}% усіх продажів за період
+            шт{isMulti ? " / міс." : ""} · {sharePct.toFixed(1).replace(".", ",")}% продажів за період{appliedFilters.length ? " (з фільтрами)" : ""}
           </div>
         </div>
         {TYPES.map(t => {
@@ -332,8 +334,10 @@ export function SalesDiscrepancyReport({ rows = [], months = [], managerFilter =
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={colCount} className="p-10 text-center text-muted-foreground">
-                    {rows.length === 0
+                    {!hasAnySales
                       ? "Фактичних продажів ще немає"
+                      : periodRows.length === 0
+                      ? "За обраними фільтрами продажів немає"
                       : query
                       ? `За запитом «${query}» нічого не знайдено`
                       : "Розбіжностей за обраний період немає — усі продажі зіставлено з CRM"}
