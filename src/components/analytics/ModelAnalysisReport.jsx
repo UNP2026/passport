@@ -15,11 +15,13 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { PointCardModal } from "./PointCardModal";
+import { EMPTY_SALES_INDEX, formatSales, salesForExcel, salesPeriodLabel } from "../../lib/salesUtils";
 
 export function ModelAnalysisReport({ 
   data = [],          // latestFilteredVisits (unique points matching current filter)
   allVisits = [],     // all visits across database (data?.raw)
   allBrands = [],     // full list of models from directory (regardless of visits)
+  salesIndex = EMPTY_SALES_INDEX, // фактичні продажі (1С) за «Період продаж»
 }) {
   const [selectedModel, setSelectedModel] = useState(null);
   const [presenceFilter, setPresenceFilter] = useState("present"); // "present" | "absent"
@@ -93,10 +95,10 @@ export function ModelAnalysisReport({
         totalPoints: totalPointsCount,          // Загальна кількість точок де представлена модель (незалежно від фільтрів)
         filteredPoints: filteredPointsCount,    // Кількість точок де представлена модель (за фільтром)
         unpPoints: unpPointsInFilterCount,      // Загальна кількість точок ЮНП (за фільтром)
-        actualSales: "—",                       // Фактичні продажі (поки що пусте)
+        actualSales: salesIndex.brand(b.id),    // Фактичні продажі моделі (1С), середнє за місяць
       };
     });
-  }, [allBrands, allUniquePoints, filteredUniquePoints, unpPointsInFilterCount]);
+  }, [allBrands, allUniquePoints, filteredUniquePoints, unpPointsInFilterCount, salesIndex]);
 
   // Separate Highfoam and Privat models
   const highfoamModels = useMemo(() => {
@@ -164,6 +166,9 @@ export function ModelAnalysisReport({
         agentName: p.agent || "Невідомий",
         totalPP: p.totalPP || 0,
         highfoamPP: p.highfoamPP || 0,
+        // Фактичні продажі обраної моделі (1С): менеджера ТТ по організації ТТ та всієї організації
+        actualByManager: salesIndex.managerOrgBrand(p.authorUserId, p.orgCode, activeModel.id),
+        actualByOrg: salesIndex.orgBrand(p.orgCode, activeModel.id),
         isCooperating: p.isCooperating === true,
         ttType: p.ttType || "—"
       };
@@ -176,7 +181,7 @@ export function ModelAnalysisReport({
     });
 
     return { presentPoints: present, absentPoints: absent };
-  }, [activeModel, filteredUniquePoints]);
+  }, [activeModel, filteredUniquePoints, salesIndex]);
 
   // Filter points list by search query
   const displayedPoints = useMemo(() => {
@@ -222,7 +227,7 @@ export function ModelAnalysisReport({
       "Загальна к-ть точок де представлена модель (без фільтрів)": m.totalPoints,
       "Кількість точок де представлена модель (за фільтром)": m.filteredPoints,
       "Загальна к-ть точок ЮНП (за фільтром)": m.unpPoints,
-      "Фактичні продажі": m.actualSales
+      [`Фактичні продажі (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(m.actualSales)
     }));
     const wsHf = XLSX.utils.json_to_sheet(hfRows);
     XLSX.utils.book_append_sheet(wb, wsHf, "Моделі Highfoam");
@@ -234,7 +239,7 @@ export function ModelAnalysisReport({
       "Загальна к-ть точок де представлена модель (без фільтрів)": m.totalPoints,
       "Кількість точок де представлена модель (за фільтром)": m.filteredPoints,
       "Загальна к-ть точок ЮНП (за фільтром)": m.unpPoints,
-      "Фактичні продажі": m.actualSales
+      [`Фактичні продажі (${salesPeriodLabel(salesIndex.months)})`]: salesForExcel(m.actualSales)
     }));
     const wsPrivat = XLSX.utils.json_to_sheet(privatRows);
     XLSX.utils.book_append_sheet(wb, wsPrivat, "Моделі Privat");
@@ -253,6 +258,8 @@ export function ModelAnalysisReport({
         "Присутність ЮНП": p.isCooperating ? "Так" : "Ні",
         "Потенціал (PP)": p.totalPP,
         "Продажі ЮНП": p.highfoamPP,
+        "Фактичні продажі по менеджеру": salesForExcel(p.actualByManager),
+        "Фактичні продажі по організації": salesForExcel(p.actualByOrg),
         "Статус моделі": presenceFilter === "present" ? "Присутня" : "Відсутня"
       }));
       const wsPoints = XLSX.utils.json_to_sheet(pointsRows);
@@ -356,10 +363,16 @@ export function ModelAnalysisReport({
                       <span>Заг. ЮНП</span>
                     </th>
                     <th 
-                      className="p-3 text-center font-semibold text-muted-foreground/60"
-                      title="Фактичні продажі (в розробці)"
+                      onClick={() => handleHfSort("actualSales")}
+                      className={`p-3 text-center font-semibold cursor-pointer hover:text-white transition-colors ${
+                        hfSortField === "actualSales" ? "text-indigo-400 font-bold bg-indigo-500/5" : ""
+                      }`}
+                      title={`Фактичні продажі моделі з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
                     >
-                      <span>Факт. продажі</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Факт. продажі</span>
+                        <ArrowUpDown className="h-3 w-3 opacity-60" />
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -402,8 +415,8 @@ export function ModelAnalysisReport({
                           <td className="p-3 text-center font-mono text-muted-foreground">
                             {m.unpPoints}
                           </td>
-                          <td className="p-3 text-center text-muted-foreground/50 font-mono">
-                            {m.actualSales}
+                          <td className={`p-3 text-center font-mono ${m.actualSales ? "text-emerald-300 font-semibold" : "text-muted-foreground/50"}`}>
+                            {formatSales(m.actualSales)}
                           </td>
                         </tr>
                       );
@@ -484,10 +497,16 @@ export function ModelAnalysisReport({
                       <span>Заг. ЮНП</span>
                     </th>
                     <th 
-                      className="p-3 text-center font-semibold text-muted-foreground/60"
-                      title="Фактичні продажі (в розробці)"
+                      onClick={() => handlePrivatSort("actualSales")}
+                      className={`p-3 text-center font-semibold cursor-pointer hover:text-white transition-colors ${
+                        privatSortField === "actualSales" ? "text-purple-400 font-bold bg-purple-500/5" : ""
+                      }`}
+                      title={`Фактичні продажі моделі з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
                     >
-                      <span>Факт. продажі</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Факт. продажі</span>
+                        <ArrowUpDown className="h-3 w-3 opacity-60" />
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -530,8 +549,8 @@ export function ModelAnalysisReport({
                           <td className="p-3 text-center font-mono text-muted-foreground">
                             {m.unpPoints}
                           </td>
-                          <td className="p-3 text-center text-muted-foreground/50 font-mono">
-                            {m.actualSales}
+                          <td className={`p-3 text-center font-mono ${m.actualSales ? "text-emerald-300 font-semibold" : "text-muted-foreground/50"}`}>
+                            {formatSales(m.actualSales)}
                           </td>
                         </tr>
                       );
@@ -637,13 +656,15 @@ export function ModelAnalysisReport({
                   <th className="p-3 text-center font-semibold">Присутність ЮНП</th>
                   <th className="p-3 text-center font-semibold">Потенціал (PP)</th>
                   <th className="p-3 text-center font-semibold">Продажі ЮНП</th>
+                  <th className="p-3 text-center font-semibold" title={`Фактичні продажі моделі «${activeModel.name}» менеджером ТТ по організації ТТ, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}>Факт. продажі по менеджеру</th>
+                  <th className="p-3 text-center font-semibold" title={`Фактичні продажі моделі «${activeModel.name}» по організації ТТ (усі менеджери), шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}>Факт. продажі по організації</th>
                   <th className="p-3 text-center font-semibold">Статус моделі</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {displayedPoints.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-10 text-center text-muted-foreground">
+                    <td colSpan={13} className="p-10 text-center text-muted-foreground">
                       {pointSearchQuery ? (
                         <span>За запитом «{pointSearchQuery}» точок не знайдено</span>
                       ) : (
@@ -728,6 +749,16 @@ export function ModelAnalysisReport({
                       {/* Продажі ЮНП */}
                       <td className="p-3 text-center font-mono font-medium text-indigo-300">
                         {point.highfoamPP}
+                      </td>
+
+                      {/* Фактичні продажі моделі по менеджеру (1С) */}
+                      <td className={`p-3 text-center font-mono ${point.actualByManager ? "text-emerald-300 font-medium" : "text-muted-foreground/50"}`}>
+                        {formatSales(point.actualByManager)}
+                      </td>
+
+                      {/* Фактичні продажі моделі по організації (1С) */}
+                      <td className={`p-3 text-center font-mono ${point.actualByOrg ? "text-emerald-300 font-medium" : "text-muted-foreground/50"}`}>
+                        {formatSales(point.actualByOrg)}
                       </td>
 
                       {/* Статус моделі */}
