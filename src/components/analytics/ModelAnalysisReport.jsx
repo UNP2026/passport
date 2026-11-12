@@ -21,7 +21,7 @@ export function ModelAnalysisReport({
   data = [],          // latestFilteredVisits (unique points matching current filter)
   allVisits = [],     // all visits across database (data?.raw)
   allBrands = [],     // full list of models from directory (regardless of visits)
-  salesIndex = EMPTY_SALES_INDEX, // фактичні продажі (1С) за «Період продаж»
+  salesIndex = EMPTY_SALES_INDEX, // фактичні продажі (IT-Enterprise) за «Період продаж»
   selectedHfModels = [],          // фільтр «Моделі Highfoam»
   selectedPmModels = [],          // фільтр «Моделі Privat»
 }) {
@@ -103,7 +103,7 @@ export function ModelAnalysisReport({
         totalPoints: totalPointsCount,          // Загальна кількість точок де представлена модель (незалежно від фільтрів)
         filteredPoints: filteredPointsCount,    // Кількість точок де представлена модель (за фільтром)
         unpPoints: unpPointsInFilterCount,      // Загальна кількість точок ЮНП (за фільтром)
-        actualSales: salesIndex.brand(b.id),    // Фактичні продажі моделі (1С), середнє за місяць
+        actualSales: salesIndex.brand(b.id),    // Фактичні продажі моделі (IT-Enterprise), середнє за місяць
       };
     });
   }, [allBrands, allUniquePoints, filteredUniquePoints, unpPointsInFilterCount, salesIndex]);
@@ -174,7 +174,7 @@ export function ModelAnalysisReport({
         agentName: p.agent || "Невідомий",
         totalPP: p.totalPP || 0,
         highfoamPP: p.highfoamPP || 0,
-        // Фактичні продажі обраної моделі (1С): менеджера ТТ по організації ТТ та всієї організації
+        // Фактичні продажі обраної моделі (IT-Enterprise): менеджера ТТ по організації ТТ та всієї організації
         actualByManager: salesIndex.managerOrgBrand(p.authorUserId, p.orgCode, activeModel.id),
         actualByOrg: salesIndex.orgBrand(p.orgCode, activeModel.id),
         isCooperating: p.isCooperating === true,
@@ -375,7 +375,7 @@ export function ModelAnalysisReport({
                       className={`p-3 text-center font-semibold cursor-pointer hover:text-white transition-colors ${
                         hfSortField === "actualSales" ? "text-indigo-400 font-bold bg-indigo-500/5" : ""
                       }`}
-                      title={`Фактичні продажі моделі з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                      title={`Фактичні продажі моделі з IT-Enterprise, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span>Факт. продажі</span>
@@ -509,7 +509,7 @@ export function ModelAnalysisReport({
                       className={`p-3 text-center font-semibold cursor-pointer hover:text-white transition-colors ${
                         privatSortField === "actualSales" ? "text-purple-400 font-bold bg-purple-500/5" : ""
                       }`}
-                      title={`Фактичні продажі моделі з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                      title={`Фактичні продажі моделі з IT-Enterprise, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span>Факт. продажі</span>
@@ -759,12 +759,12 @@ export function ModelAnalysisReport({
                         {point.highfoamPP}
                       </td>
 
-                      {/* Фактичні продажі моделі по менеджеру (1С) */}
+                      {/* Фактичні продажі моделі по менеджеру (IT-Enterprise) */}
                       <td className={`p-3 text-center font-mono ${point.actualByManager ? "text-emerald-300 font-medium" : "text-muted-foreground/50"}`}>
                         {formatSales(point.actualByManager)}
                       </td>
 
-                      {/* Фактичні продажі моделі по організації (1С) */}
+                      {/* Фактичні продажі моделі по організації (IT-Enterprise) */}
                       <td className={`p-3 text-center font-mono ${point.actualByOrg ? "text-emerald-300 font-medium" : "text-muted-foreground/50"}`}>
                         {formatSales(point.actualByOrg)}
                       </td>

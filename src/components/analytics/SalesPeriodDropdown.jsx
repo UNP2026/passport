@@ -60,7 +60,7 @@ export function SalesPeriodDropdown({ available = [], selected = [], onChange })
         onClick={() => hasData && setIsOpen(o => !o)}
         disabled={!hasData}
         className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium border transition-all duration-200 select-none bg-emerald-600/10 border-emerald-500/30 text-emerald-200 hover:bg-emerald-600/15 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={hasData ? "Період фактичних продажів (з 1С)" : "Фактичних продажів ще немає"}
+        title={hasData ? "Період фактичних продажів (з IT-Enterprise)" : "Фактичних продажів ще немає"}
       >
         <Receipt className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
         <span className="text-white/70">Період продаж:</span>

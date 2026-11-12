@@ -30,7 +30,7 @@ const GROUPS = [
 ];
 
 /**
- * Розбіжності фактичних продажів (1С) і даних CRM за «Період продаж»:
+ * Розбіжності фактичних продажів (IT-Enterprise) і даних CRM за «Період продаж»:
  * продажі по організаціях, моделях або менеджерах, коди яких не знайдено в CRM.
  * Організація може бути в CRM, а модель — ні (і навпаки).
  */
@@ -221,7 +221,7 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Аналіз фактичних продаж</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Продажі з 1С, яких не вдалося зіставити з CRM · {periodLabel}
+              Продажі з IT-Enterprise, яких не вдалося зіставити з CRM · {periodLabel}
               {isMulti ? ` · середнє за ${months.length} міс.` : ""}
             </p>
             {appliedFilters.length > 0 && (
@@ -411,7 +411,7 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
         </div>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Зіставлення за кодами 1С: код організації → «Організації» CRM, skm → «Моделі» CRM, код менеджера → профіль користувача.
+          Зіставлення за кодами IT-Enterprise: код організації → «Організації» CRM, skm → «Моделі» CRM, код менеджера → профіль користувача.
           Щойно організацію чи модель внесуть у CRM з тим самим кодом, рядок зникне з цього звіту.
         </p>
       </div>

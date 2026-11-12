@@ -34,7 +34,7 @@ export function ManagerResultsTable({ data = [], agents = [], salesIndex = EMPTY
       const sharePct = potential > 0 ? (sales / potential) * 100 : 0;
       const growthPotential = Math.max(0, potential - sales);
       const withoutUs = managerVisits.filter(v => !v.isCooperating).length;
-      // Фактичні продажі менеджера (1С) за «Період продаж», середнє за місяць
+      // Фактичні продажі менеджера (IT-Enterprise) за «Період продаж», середнє за місяць
       const userId = managerVisits.find(v => v.authorUserId)?.authorUserId || null;
       const actualSales = salesIndex.manager(userId, agentName);
 
@@ -267,7 +267,7 @@ export function ManagerResultsTable({ data = [], agents = [], salesIndex = EMPTY
 
                   <th
                     onClick={() => handleSort("actualSales")}
-                    title={`Фактичні продажі менеджера з 1С, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
+                    title={`Фактичні продажі менеджера з IT-Enterprise, шт (${salesPeriodLabel(salesIndex.months)}${salesIndex.monthsCount > 1 ? `, середнє за ${salesIndex.monthsCount} міс.` : ""})`}
                     className={getHeaderClass("actualSales", "text-center")}
                   >
                     Фактичні продажі
@@ -333,7 +333,7 @@ export function ManagerResultsTable({ data = [], agents = [], salesIndex = EMPTY
                         {row.sales.toLocaleString("uk-UA")}
                       </td>
 
-                      {/* Фактичні продажі (1С) */}
+                      {/* Фактичні продажі (IT-Enterprise) */}
                       <td className={getCellClass("actualSales") + " font-mono"}>
                         <span className={row.actualSales ? "text-emerald-300" : "text-muted-foreground"}>
                           {formatSales(row.actualSales)}

@@ -65,7 +65,7 @@ export function AnalyticsPage() {
   });
 
   const [data, setData] = useState(null);
-  // Фактичні продажі з 1С (sales_v)
+  // Фактичні продажі з IT-Enterprise (sales_v)
   const [sales, setSales] = useState({ rows: [], months: [] });
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -128,17 +128,25 @@ export function AnalyticsPage() {
   };
 
   // Фактичні продажі з урахуванням фільтрів, що до них застосовні:
-  // Менеджер, Організація, Основні організації, Моделі Highfoam / Privat.
-  // (Область, місто, ТТ, тип, категорія, присутність — це дані візитів, у продажах 1С їх немає.)
+  // Менеджер, Організація, Торгова точка (→ організація ТТ), Основні організації, Моделі Highfoam / Privat.
+  // (Область, місто, тип, категорія, присутність — це дані візитів, у продажах IT-Enterprise їх немає.)
   const salesFilterLabels = useMemo(() => {
     const l = [];
     if (filters.managers?.length) l.push("Менеджер");
     if (filters.orgs?.length) l.push("Організація");
+    if (filters.points?.length) l.push("Торгова точка (організація ТТ)");
     if (filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length) l.push("Основні організації");
     if (filters.hfModels?.length) l.push("Моделі Highfoam");
     if (filters.pmModels?.length) l.push("Моделі Privat");
     return l;
-  }, [filters.managers, filters.orgs, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+  }, [filters.managers, filters.orgs, filters.points, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+
+  // Фільтр «Торгова точка» → продажі організацій, за якими закріплені обрані ТТ
+  const pointOrgCodes = useMemo(() => {
+    if (!filters.points?.length) return null;
+    const pts = new Set(filters.points);
+    return new Set((data?.raw || []).filter(d => pts.has(d.point) && d.orgCode).map(d => d.orgCode));
+  }, [filters.points, data?.raw]);
 
   const filteredSalesRows = useMemo(() => {
     const norm = (x) => (x || "").trim().toLowerCase();
@@ -149,6 +157,7 @@ export function AnalyticsPage() {
     return sales.rows.filter(r => {
       if (mgr.size && !mgr.has(norm(r.manager_name))) return false;
       if (orgs.size && !(r.org_in_crm && orgs.has(r.org_name))) return false;
+      if (pointOrgCodes && !pointOrgCodes.has(r.org_code)) return false;
       if (mainOrgsActive) {
         const code = getRowMainOrgCode({ orgCode: r.org_code, org: r.org_name });
         if (code && !filters.mainOrgs.includes(code)) return false;
@@ -156,7 +165,7 @@ export function AnalyticsPage() {
       if (models.size && !(r.model_in_crm && models.has(r.brand_name))) return false;
       return true;
     });
-  }, [sales.rows, filters.managers, filters.orgs, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+  }, [sales.rows, filters.managers, filters.orgs, pointOrgCodes, filters.mainOrgs, filters.hfModels, filters.pmModels]);
 
   // Індекс фактичних продажів за обраний період (середнє за місяць)
   const salesIndex = useMemo(
@@ -1272,7 +1281,7 @@ export function AnalyticsPage() {
             </div>
           )}
 
-          {/* TAB 3: АНАЛІЗ ФАКТИЧНИХ ПРОДАЖ (розбіжності продажів 1С і CRM) */}
+          {/* TAB 3: АНАЛІЗ ФАКТИЧНИХ ПРОДАЖ (розбіжності продажів IT-Enterprise і CRM) */}
           {viewMode === "sales" && (
             <div className="relative z-10 space-y-6 animate-in fade-in duration-200">
               <SalesDiscrepancyReport

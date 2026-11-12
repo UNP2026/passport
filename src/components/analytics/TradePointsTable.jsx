@@ -94,7 +94,7 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [], sa
         orgTtCount: v.orgTtCount || 0,
         totalPP: v.totalPP || 0,
         highfoamPP: v.highfoamPP || 0,
-        // Фактичні продажі (1С) за «Період продаж»: менеджера ТТ по організації ТТ та всієї організації
+        // Фактичні продажі (IT-Enterprise) за «Період продаж»: менеджера ТТ по організації ТТ та всієї організації
         actualByManager: salesIndex.managerOrg(v.authorUserId, v.orgCode),
         actualByOrg: salesIndex.org(v.orgCode),
         totalKV: v.totalKV || 0,
@@ -495,14 +495,14 @@ export function TradePointsTable({ data = [], allVisits = [], allBrands = [], sa
                           {row.highfoamPP.toLocaleString("uk-UA")}
                         </td>
 
-                        {/* Фактичні продажі по менеджеру (1С) */}
+                        {/* Фактичні продажі по менеджеру (IT-Enterprise) */}
                         <td className={getCellClass("actualByManager") + " font-mono"}>
                           <span className={row.actualByManager ? "text-emerald-300" : "text-muted-foreground"}>
                             {formatSales(row.actualByManager)}
                           </span>
                         </td>
 
-                        {/* Фактичні продажі по організації (1С) */}
+                        {/* Фактичні продажі по організації (IT-Enterprise) */}
                         <td className={getCellClass("actualByOrg") + " font-mono"}>
                           <span className={row.actualByOrg ? "text-emerald-300" : "text-muted-foreground"}>
                             {formatSales(row.actualByOrg)}

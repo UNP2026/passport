@@ -415,7 +415,7 @@ export function AnalyticsFilters({
           visitsCountByDate={visitsCountByDate}
         />
 
-        {/* Період фактичних продаж (з 1С): один місяць або діапазон → середнє за місяць */}
+        {/* Період фактичних продаж (з IT-Enterprise): один місяць або діапазон → середнє за місяць */}
         <SalesPeriodDropdown
           available={salesMonthsAvailable}
           selected={filters.salesMonths || []}
