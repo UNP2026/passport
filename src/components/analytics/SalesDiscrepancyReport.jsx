@@ -24,9 +24,9 @@ const TILE_ACTIVE = {
 };
 
 const GROUPS = [
-  { id: "detail", label: "Детально" },
-  { id: "org", label: "По організаціях" },
-  { id: "model", label: "По моделях" },
+  { id: "detail", label: "Детально", hint: "Усі розбіжності: організація × модель × менеджер" },
+  { id: "org", label: "По організаціях", hint: "Лише організації, яких немає в CRM" },
+  { id: "model", label: "По моделях", hint: "Лише моделі, яких немає в CRM" },
 ];
 
 /**
@@ -99,7 +99,12 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
 
   // Групування
   const grouped = useMemo(() => {
-    const list = detail.filter(g => matchesType(g, typeFilter));
+    // «По організаціях» — лише організації, яких немає в CRM; «По моделях» — лише моделі, яких немає в CRM
+    const list = detail.filter(g =>
+      matchesType(g, typeFilter) &&
+      (groupBy !== "org" || !g.orgInCrm) &&
+      (groupBy !== "model" || !g.modelInCrm)
+    );
     if (groupBy === "detail") {
       return list.map(g => ({ ...g, months: g.monthSet.size, avg: g.total / divisor }));
     }
@@ -284,6 +289,7 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
                   key={g.id}
                   type="button"
                   onClick={() => setGroupBy(g.id)}
+                  title={g.hint}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     groupBy === g.id ? "bg-indigo-600 text-white shadow" : "text-muted-foreground hover:text-white"
                   }`}
@@ -303,6 +309,9 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
               </button>
             )}
           </div>
+          <span className="text-[11px] text-muted-foreground lg:mr-auto lg:ml-1">
+            {GROUPS.find(g => g.id === groupBy)?.hint}
+          </span>
           <div className="relative min-w-[220px] sm:min-w-[280px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -340,6 +349,10 @@ export function SalesDiscrepancyReport({ rows = [], hasAnySales = false, months 
                       ? "За обраними фільтрами продажів немає"
                       : query
                       ? `За запитом «${query}» нічого не знайдено`
+                      : groupBy === "org"
+                      ? "За обраний період немає продажів по організаціях, яких немає в CRM"
+                      : groupBy === "model"
+                      ? "За обраний період немає продажів по моделях, яких немає в CRM"
                       : "Розбіжностей за обраний період немає — усі продажі зіставлено з CRM"}
                   </td>
                 </tr>
