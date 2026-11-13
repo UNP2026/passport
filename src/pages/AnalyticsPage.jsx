@@ -148,14 +148,12 @@ export function AnalyticsPage() {
     return new Set((data?.raw || []).filter(d => pts.has(d.point) && d.orgCode).map(d => d.orgCode));
   }, [filters.points, data?.raw]);
 
-  const filteredSalesRows = useMemo(() => {
-    const norm = (x) => (x || "").trim().toLowerCase();
-    const mgr = new Set((filters.managers || []).map(norm));
+  // Продажі за фільтрами без «Менеджер» — для показників по організації (продажі всієї організації)
+  const orgFilteredSalesRows = useMemo(() => {
     const orgs = new Set(filters.orgs || []);
     const models = new Set([...(filters.hfModels || []), ...(filters.pmModels || [])]);
     const mainOrgsActive = filters.mainOrgs && filters.mainOrgs.length < ALL_MAIN_ORG_CODES.length;
     return sales.rows.filter(r => {
-      if (mgr.size && !mgr.has(norm(r.manager_name))) return false;
       if (orgs.size && !(r.org_in_crm && orgs.has(r.org_name))) return false;
       if (pointOrgCodes && !pointOrgCodes.has(r.org_code)) return false;
       if (mainOrgsActive) {
@@ -165,13 +163,26 @@ export function AnalyticsPage() {
       if (models.size && !(r.model_in_crm && models.has(r.brand_name))) return false;
       return true;
     });
-  }, [sales.rows, filters.managers, filters.orgs, pointOrgCodes, filters.mainOrgs, filters.hfModels, filters.pmModels]);
+  }, [sales.rows, filters.orgs, pointOrgCodes, filters.mainOrgs, filters.hfModels, filters.pmModels]);
 
-  // Індекс фактичних продажів за обраний період (середнє за місяць)
-  const salesIndex = useMemo(
-    () => buildSalesIndex(filteredSalesRows, filters.salesMonths || []),
-    [filteredSalesRows, filters.salesMonths]
-  );
+  // + фільтр «Менеджер» — для показників по менеджеру та звіту розбіжностей
+  const filteredSalesRows = useMemo(() => {
+    const norm = (x) => (x || "").trim().toLowerCase();
+    const mgr = new Set((filters.managers || []).map(norm));
+    if (!mgr.size) return orgFilteredSalesRows;
+    return orgFilteredSalesRows.filter(r => mgr.has(norm(r.manager_name)));
+  }, [orgFilteredSalesRows, filters.managers]);
+
+  // Індекс фактичних продажів за обраний період (середнє за місяць).
+  // Показники по організації (org, orgBrand, orgModels) — без фільтра «Менеджер»:
+  // «Фактичні продажі по організації» = продажі всієї організації незалежно від менеджера.
+  const salesIndex = useMemo(() => {
+    const months = filters.salesMonths || [];
+    const byManager = buildSalesIndex(filteredSalesRows, months);
+    if (orgFilteredSalesRows === filteredSalesRows) return byManager;
+    const byOrg = buildSalesIndex(orgFilteredSalesRows, months);
+    return { ...byManager, org: byOrg.org, orgBrand: byOrg.orgBrand, orgModels: byOrg.orgModels };
+  }, [filteredSalesRows, orgFilteredSalesRows, filters.salesMonths]);
 
   // Automatically prune orgs or points that belong to a disabled main organization so they don't conflict
   useEffect(() => {
